@@ -21,7 +21,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.jp_rco2.workly"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,7 +38,14 @@
           "microphonePermission": "Permite a Workly acceder al micrófono para grabar notas de voz en el chat."
         }
       ],
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "24ef77d2-b4cf-4bd0-8ea3-2832204d57fa"
+      }
+    }
   }
 }
