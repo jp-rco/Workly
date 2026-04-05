@@ -1,0 +1,9 @@
+src/firebase/config.ts(2,26): error TS2305: Module '"firebase/auth"' has no exported member 'getReactNativePersistence'.
+src/navigation/MainNavigator.tsx(4,26): error TS2307: Cannot find module '@expo/vector-icons' or its corresponding type declarations.
+src/navigation/MainNavigator.tsx(98,11): error TS2353: Object literal may only specify known properties, and 'headerBackTitleVisible' does not exist in type 'NativeStackNavigationOptions | ((props: { route: RouteProp<MainStackParamList, "EditProfile">; navigation: NativeStackNavigationProp<MainStackParamList, "EditProfile", string | undefined>; theme: Theme; }) => NativeStackNavigationOptions)'.
+src/navigation/MainNavigator.tsx(108,11): error TS2353: Object literal may only specify known properties, and 'headerBackTitleVisible' does not exist in type 'NativeStackNavigationOptions | ((props: { route: RouteProp<MainStackParamList, "Detail">; navigation: NativeStackNavigationProp<MainStackParamList, "Detail", string | undefined>; theme: Theme; }) => NativeStackNavigationOptions)'.
+src/screens/auth/LoginScreen.tsx(7,26): error TS2307: Cannot find module '@expo/vector-icons' or its corresponding type declarations.
+src/screens/auth/RegisterScreen.tsx(8,26): error TS2307: Cannot find module '@expo/vector-icons' or its corresponding type declarations.
+src/screens/auth/RegisterScreen.tsx(17,54): error TS2339: Property 'route' does not exist on type 'Props'.
+src/screens/main/HomeScreen.tsx(12,26): error TS2307: Cannot find module '@expo/vector-icons' or its corresponding type declarations.
+src/screens/main/ProfileScreen.tsx(5,26): error TS2307: Cannot find module '@expo/vector-icons' or its corresponding type declarations.
