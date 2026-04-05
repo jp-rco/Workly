@@ -27,7 +27,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Permite a Workly acceder al micrófono para grabar notas de voz en el chat."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

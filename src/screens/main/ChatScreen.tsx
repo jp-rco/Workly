@@ -1,21 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert, Linking, Modal
+  KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert, Linking, Modal, Keyboard
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../../navigation/MainNavigator';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { 
-  collection, addDoc, query, where, onSnapshot, 
-  serverTimestamp, setDoc, doc, increment, getDoc 
+import {
+  collection, addDoc, query, where, onSnapshot,
+  serverTimestamp, setDoc, doc, increment, getDoc
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { SIZES } from '../../constants/theme';
 import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
+import { 
+  useAudioRecorder, useAudioPlayer, useAudioPlayerStatus, 
+  RecordingPresets, requestRecordingPermissionsAsync 
+} from 'expo-audio';
 import { pickAndUploadImage, uploadToFirebase } from '../../utils/uploadImage';
 import MapPickerScreen from './MapPickerScreen';
 
@@ -44,15 +49,17 @@ export default function ChatScreen({ route, navigation }: Props) {
   const { applicationId, otherUserId, jobTitle: routeJobTitle } = route.params;
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
-  
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [appData, setAppData] = useState<ApplicationData | null>(null);
-  
-  // Audio state
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+
+  // Audio state (expo-audio)
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
@@ -84,7 +91,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     }
 
     // Use applicationId if provided, otherwise a composite ID from both users
-    const conversationId = applicationId || 
+    const conversationId = applicationId ||
       (userProfile.uid < otherUserId ? `${userProfile.uid}_${otherUserId}` : `${otherUserId}_${userProfile.uid}`);
 
     const q = query(
@@ -97,11 +104,12 @@ export default function ChatScreen({ route, navigation }: Props) {
         id: doc.id,
         ...doc.data()
       })) as Message[];
-      
+
+      // Sort newest first for inverted list
       msgs.sort((a, b) => {
         const timeA = a.createdAt?.seconds || 0;
         const timeB = b.createdAt?.seconds || 0;
-        return timeA - timeB;
+        return timeB - timeA;
       });
 
       setMessages(msgs);
@@ -112,9 +120,9 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   const sendMessage = async (payload: Partial<Message>) => {
     if (!userProfile) return;
-    const conversationId = applicationId || 
+    const conversationId = applicationId ||
       (userProfile.uid < otherUserId ? `${userProfile.uid}_${otherUserId}` : `${otherUserId}_${userProfile.uid}`);
-      
+
     try {
       // 1. Add the message
       await addDoc(collection(db, 'messages'), {
@@ -151,14 +159,15 @@ export default function ChatScreen({ route, navigation }: Props) {
   };
 
   const handleSendImage = async () => {
-    const storagePath = `chat_media/${applicationId}/img_${Date.now()}.jpg`;
+    const mediaId = applicationId || 'direct_chats';
+    const storagePath = `chat_media/${mediaId}/img_${Date.now()}.jpg`;
     const url = await pickAndUploadImage(storagePath);
     if (url) sendMessage({ imageUri: url });
   };
 
   const onLocationPicked = (loc: any) => {
     setShowMapPicker(false);
-    sendMessage({ 
+    sendMessage({
       location: { latitude: loc.latitude, longitude: loc.longitude },
       text: `📍 Ubicación: ${loc.address}`
     });
@@ -166,32 +175,26 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await requestRecordingPermissionsAsync();
       if (permission.status === 'granted') {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-        const { recording } = await Audio.Recording.createAsync(
-            Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        setRecording(recording);
         setIsRecording(true);
+        recorder.record();
       }
     } catch (err) {
       console.error('Failed to start recording', err);
+      setIsRecording(false);
     }
   };
 
   const stopRecording = async () => {
     setIsRecording(false);
-    if (!recording) return;
+    if (!recorder.isRecording) return;
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await recorder.stop();
+      const uri = recorder.uri;
       if (uri) {
-        const storagePath = `chat_media/${applicationId}/audio_${Date.now()}.m4a`;
+        const mediaId = applicationId || 'direct_chats';
+        const storagePath = `chat_media/${mediaId}/audio_${Date.now()}.m4a`;
         const url = await uploadToFirebase(uri, storagePath);
         if (url) sendMessage({ audioUri: url });
       }
@@ -204,23 +207,17 @@ export default function ChatScreen({ route, navigation }: Props) {
     const isMine = item.senderId === userProfile?.uid;
     return (
       <View style={[styles.messageWrapper, isMine ? styles.myMessage : styles.theirMessage]}>
-        <View style={[styles.bubble, isMine ? { backgroundColor: colors.primary } : { backgroundColor: colors.inputBackground }]}>
+        <View style={[
+          styles.bubble,
+          isMine ? [styles.myBubble, { backgroundColor: colors.primary }] : [styles.theirBubble, { backgroundColor: colors.inputBackground }]
+        ]}>
           {item.text && <Text style={[styles.messageText, isMine ? { color: '#FFFFFF' } : { color: colors.text }]}>{item.text}</Text>}
           {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
           {item.audioUri && (
-            <TouchableOpacity 
-              style={styles.audioBtn} 
-              onPress={async () => {
-                const { sound } = await Audio.Sound.createAsync({ uri: item.audioUri! });
-                await sound.playAsync();
-              }}
-            >
-              <Ionicons name="play-circle" size={32} color={isMine ? '#FFFFFF' : colors.primary} />
-              <Text style={[styles.audioText, isMine ? { color: '#FFFFFF' } : { color: colors.text }]}>Nota de voz</Text>
-            </TouchableOpacity>
+            <VoiceMessagePlayer uri={item.audioUri} isMine={isMine} colors={colors} />
           )}
           {item.location && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.locationBubble}
               onPress={() => {
                 const url = `https://www.google.com/maps/search/?api=1&query=${item.location!.latitude},${item.location!.longitude}`;
@@ -238,13 +235,13 @@ export default function ChatScreen({ route, navigation }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: colors.background }]} 
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 120 : 0}
+      keyboardVerticalOffset={headerHeight}
     >
       {appData && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.contextCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
           onPress={() => navigation.navigate('Detail', { id: appData.jobId, type: 'Job' })}
         >
@@ -267,20 +264,22 @@ export default function ChatScreen({ route, navigation }: Props) {
         renderItem={renderMessage}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        inverted
+        showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={Keyboard.dismiss}
       />
 
-      <View style={[styles.inputArea, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+      <View style={[styles.inputArea, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
         <TouchableOpacity style={styles.iconBtn} onPress={handleSendImage}>
-          <Ionicons name="image" size={24} color={colors.primary} />
+          <Ionicons name="image" size={26} color={colors.primary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMapPicker(true)}>
-          <Ionicons name="location" size={24} color={colors.primary} />
+          <Ionicons name="location" size={26} color={colors.primary} />
         </TouchableOpacity>
-        
+
         <TextInput
           style={[styles.input, { color: colors.text, backgroundColor: colors.inputBackground }]}
-          placeholder="Escribe un mensaje..."
+          placeholder="Mensaje..."
           placeholderTextColor={colors.textLight}
           value={inputText}
           onChangeText={setInputText}
@@ -292,8 +291,8 @@ export default function ChatScreen({ route, navigation }: Props) {
             <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
-            style={[styles.sendBtn, { backgroundColor: isRecording ? colors.reject : colors.primary }]} 
+          <TouchableOpacity
+            style={[styles.micBtn, { backgroundColor: isRecording ? colors.reject : colors.primary }]}
             onPressIn={startRecording}
             onPressOut={stopRecording}
           >
@@ -312,15 +311,43 @@ export default function ChatScreen({ route, navigation }: Props) {
   );
 }
 
+// Sub-component for better audio handling with expo-audio
+function VoiceMessagePlayer({ uri, isMine, colors }: { uri: string, isMine: boolean, colors: any }) {
+  const player = useAudioPlayer(uri);
+  const status = useAudioPlayerStatus(player);
+
+  const handlePlay = () => {
+    if (status.didJustFinish) {
+      player.seekTo(0);
+    }
+    player.play();
+  };
+
+  return (
+    <TouchableOpacity style={styles.audioBtn} onPress={handlePlay}>
+      <Ionicons
+        name={status.playing ? "pause-circle" : "play-circle"}
+        size={32}
+        color={isMine ? '#FFFFFF' : colors.primary}
+      />
+      <Text style={[styles.audioText, isMine ? { color: '#FFFFFF' } : { color: colors.text }]}>
+        {status.playing ? 'Reproduciendo...' : 'Nota de voz'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: { padding: SIZES.md, gap: 10 },
   messageWrapper: { marginBottom: 10, maxWidth: '80%' },
   myMessage: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   theirMessage: { alignSelf: 'flex-start', alignItems: 'flex-start' },
-  bubble: { padding: 12, borderRadius: 20 },
-  messageText: { fontSize: 16 },
-  messageImage: { width: 220, height: 220, borderRadius: 15, marginTop: 5 },
+  bubble: { padding: 12, borderRadius: 20, minWidth: 40 },
+  myBubble: { borderBottomRightRadius: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+  theirBubble: { borderBottomLeftRadius: 4, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  messageText: { fontSize: 16, lineHeight: 22 },
+  messageImage: { width: 220, height: 220, borderRadius: 12, marginTop: 5 },
   audioBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 120 },
   audioText: { fontSize: 14, fontWeight: '600' },
   locationBubble: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -328,9 +355,10 @@ const styles = StyleSheet.create({
   timeText: { fontSize: 10, color: '#999', marginTop: 4 },
   inputArea: { flexDirection: 'row', alignItems: 'center', padding: 10, borderTopWidth: 1 },
   iconBtn: { padding: 8 },
-  input: { flex: 1, borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, marginHorizontal: 5, maxHeight: 100 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  
+  input: { flex: 1, borderRadius: 22, paddingHorizontal: 15, paddingVertical: 10, marginHorizontal: 5, maxHeight: 100, fontSize: 16 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  micBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+
   contextCard: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, gap: 12 },
   contextImage: { width: 40, height: 40, borderRadius: 8 },
   contextInfo: { flex: 1 },
