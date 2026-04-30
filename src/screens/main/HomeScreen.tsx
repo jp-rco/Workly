@@ -1,17 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Image, TouchableOpacity, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Image, TouchableOpacity, Alert, Dimensions, LayoutAnimation, Platform } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { collection, getDocs, query, where, addDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { SIZES, SHADOWS } from '../../constants/theme';
+import { SIZES, SHADOWS, FONTS, type } from '../../constants/theme';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList, MainTabParamList } from '../../navigation/MainNavigator';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
-import { LayoutAnimation, Platform } from 'react-native';
+import { FadeInUp, PressScale } from '../../components/common/Animated';
 
 const { width } = Dimensions.get('window');
 
@@ -20,9 +20,7 @@ type HomeScreenNavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<MainStackParamList>
 >;
 
-type Props = {
-  navigation: HomeScreenNavigationProp;
-};
+type Props = { navigation: HomeScreenNavigationProp };
 
 export default function HomeScreen({ navigation }: Props) {
   const { userProfile } = useAuth();
@@ -34,9 +32,7 @@ export default function HomeScreen({ navigation }: Props) {
   const fetchCards = useCallback(async () => {
     if (!userProfile) return;
     setLoading(true);
-
     try {
-      // Filter out swiped/applied items
       const swipesQuery = query(collection(db, 'swipes'), where('userId', '==', userProfile.uid));
       const swipesSnap = await getDocs(swipesQuery);
       const swipedIds = swipesSnap.docs.map(d => d.data().targetId);
@@ -55,8 +51,8 @@ export default function HomeScreen({ navigation }: Props) {
         const jobsSnapshot = await getDocs(collection(db, 'jobs'));
         const jobsData = jobsSnapshot.docs
           .map(d => ({ id: d.id, ...d.data() }))
-          .filter((job: any) => 
-            (job.status === 'active' || job.status === 'activo') && 
+          .filter((job: any) =>
+            (job.status === 'active' || job.status === 'activo') &&
             !excludedIds.includes(job.id) &&
             job.ownerUid !== userProfile.uid
           );
@@ -77,59 +73,40 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }, [userProfile]);
 
-  useEffect(() => {
-    fetchCards();
-  }, [fetchCards]);
+  useEffect(() => { fetchCards(); }, [fetchCards]);
 
   const handleSwipedRight = async (cardIndex: number) => {
     if (!userProfile) return;
     const item = cards[cardIndex];
     if (!item) return;
-
     try {
       if (userProfile.userType === 'Searching') {
         await addDoc(collection(db, 'applications'), {
-          userId: userProfile.uid,
-          jobId: item.id,
-          jobTitle: item.title || '',
-          status: 'pending',
-          description: userProfile.jobDescription || '',
-          email: userProfile.email || '',
-          name: userProfile.name || '',
-          photoURL: userProfile.photoURL || '',
-          resumeURL: userProfile.resumeURL || '',
+          userId: userProfile.uid, jobId: item.id, jobTitle: item.title || '',
+          status: 'pending', description: userProfile.jobDescription || '',
+          email: userProfile.email || '', name: userProfile.name || '',
+          photoURL: userProfile.photoURL || '', resumeURL: userProfile.resumeURL || '',
           createdAt: new Date().toISOString(),
         });
       } else {
         await addDoc(collection(db, 'likes'), {
-          employerId: userProfile.uid,
-          userId: item.uid,
-          type: 'EmployerLikesUser',
-          timestamp: new Date().toISOString(),
+          employerId: userProfile.uid, userId: item.uid,
+          type: 'EmployerLikesUser', timestamp: new Date().toISOString(),
         });
       }
-    } catch (e) {
-      console.error('Error saving swipe right:', e);
-    }
+    } catch (e) { console.error('Error saving swipe right:', e); }
   };
 
   const handleSwipedLeft = async (cardIndex: number) => {
     if (!userProfile) return;
     const item = cards[cardIndex];
     if (!item) return;
-
     const targetId = userProfile.userType === 'Searching' ? item.id : item.uid;
-
     try {
       await addDoc(collection(db, 'swipes'), {
-        userId: userProfile.uid,
-        targetId: targetId,
-        type: 'nope',
-        timestamp: new Date().toISOString(),
+        userId: userProfile.uid, targetId, type: 'nope', timestamp: new Date().toISOString(),
       });
-    } catch (e) {
-      console.error('Error saving swipe left:', e);
-    }
+    } catch (e) { console.error('Error saving swipe left:', e); }
   };
 
   const handleClearDecisions = async () => {
@@ -141,15 +118,15 @@ export default function HomeScreen({ navigation }: Props) {
       const batch = writeBatch(db);
       snap.docs.forEach((d) => batch.delete(d.ref));
       await batch.commit();
-      Alert.alert('Éxito', 'Tus decisiones pasadas han sido borradas.');
+      Alert.alert('Listo', 'Tus descartes anteriores fueron borrados.');
       fetchCards();
     } catch (e) {
       console.error('Error clearing decisions:', e);
       Alert.alert('Error', 'No se pudieron borrar las decisiones.');
-    } finally {
-      setResetting(false);
-    }
+    } finally { setResetting(false); }
   };
+
+  const s = makeStyles(colors, isDark);
 
   const renderCard = (card: any) => {
     if (!card) return null;
@@ -163,8 +140,10 @@ export default function HomeScreen({ navigation }: Props) {
               source={{ uri: card.imageUrl || 'https://via.placeholder.com/400x300.png?text=Trabajo' }}
               style={s.cardImage}
             />
+            <View style={s.imageScrim} />
             <View style={s.salaryBadge}>
-              <Text style={s.salaryText}>${card.pay || 'N/A'}</Text>
+              <Text style={s.salaryCurrency}>$</Text>
+              <Text style={s.salaryText}>{card.pay || 'N/A'}</Text>
             </View>
           </View>
 
@@ -175,8 +154,8 @@ export default function HomeScreen({ navigation }: Props) {
                 <Text style={s.cardSubtitle} numberOfLines={1}>{card.companyName || 'Empresa'}</Text>
               </View>
               <View style={s.locationChip}>
-                <Ionicons name="location-outline" size={14} color={colors.primary} />
-                <Text style={s.locationText}>{card.address || 'Ubicación'}</Text>
+                <Ionicons name="location-outline" size={12} color={colors.primary} />
+                <Text style={s.locationText} numberOfLines={1}>{card.address || 'Ubicación'}</Text>
               </View>
             </View>
 
@@ -184,21 +163,21 @@ export default function HomeScreen({ navigation }: Props) {
 
             <View style={s.detailGrid}>
               <View style={s.detailItem}>
-                <Ionicons name="time-outline" size={18} color={colors.textLight} />
+                <View style={s.detailIcon}><Ionicons name="time-outline" size={14} color={colors.primary} /></View>
                 <Text style={s.detailText}>{card.duration || 'Flexible'}</Text>
               </View>
               <View style={s.detailItem}>
-                <Ionicons name="briefcase-outline" size={18} color={colors.textLight} />
+                <View style={s.detailIcon}><Ionicons name="briefcase-outline" size={14} color={colors.primary} /></View>
                 <Text style={s.detailText}>{card.modality || 'Presencial'}</Text>
               </View>
             </View>
 
-            <Text style={s.summaryTitle}>Descripción rápida</Text>
+            <Text style={s.summaryTitle}>Descripción</Text>
             <Text style={s.cardDescription} numberOfLines={2}>{card.description}</Text>
 
             {requirements.length > 0 && (
               <View style={s.reqContainer}>
-                <Text style={s.summaryTitle}>Requisitos:</Text>
+                <Text style={s.summaryTitle}>Requisitos</Text>
                 <View style={s.skillsRow}>
                   {requirements.slice(0, 3).map((r: string, i: number) => (
                     <View key={i} style={s.skillChip}><Text style={s.skillText}>{r}</Text></View>
@@ -208,9 +187,10 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             )}
           </View>
+
           <View style={s.footerHint}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.textLight} />
-            <Text style={s.footerHintText}>Toca para ver todo el detalle</Text>
+            <Ionicons name="hand-left-outline" size={13} color={colors.textLight} />
+            <Text style={s.footerHintText}>Toca para ver el detalle completo</Text>
           </View>
         </View>
       );
@@ -223,6 +203,7 @@ export default function HomeScreen({ navigation }: Props) {
               source={{ uri: card.photoURL || card.photoUrl || 'https://via.placeholder.com/400x400.png?text=Usuario' }}
               style={s.cardImage}
             />
+            <View style={s.imageScrim} />
           </View>
 
           <View style={s.cardContent}>
@@ -232,8 +213,8 @@ export default function HomeScreen({ navigation }: Props) {
                 <Text style={s.cardSubtitle} numberOfLines={1}>{card.profession || 'Profesional'}</Text>
               </View>
               <View style={s.locationChip}>
-                <Ionicons name="location-outline" size={14} color={colors.primary} />
-                <Text style={s.locationText}>{card.city || 'Ubicación'}</Text>
+                <Ionicons name="location-outline" size={12} color={colors.primary} />
+                <Text style={s.locationText} numberOfLines={1}>{card.city || 'Ubicación'}</Text>
               </View>
             </View>
 
@@ -241,11 +222,11 @@ export default function HomeScreen({ navigation }: Props) {
 
             <View style={s.detailGrid}>
               <View style={s.detailItem}>
-                <Ionicons name="star-outline" size={18} color={colors.textLight} />
+                <View style={s.detailIcon}><Ionicons name="star-outline" size={14} color={colors.primary} /></View>
                 <Text style={s.detailText}>{card.experienceYears ? `${card.experienceYears} años exp` : 'Talento'}</Text>
               </View>
               <View style={s.detailItem}>
-                <Ionicons name="school-outline" size={18} color={colors.textLight} />
+                <View style={s.detailIcon}><Ionicons name="school-outline" size={14} color={colors.primary} /></View>
                 <Text style={s.detailText}>{card.education || 'Certificado'}</Text>
               </View>
             </View>
@@ -255,29 +236,32 @@ export default function HomeScreen({ navigation }: Props) {
 
             {skills.length > 0 && (
               <View style={s.reqContainer}>
-                <Text style={s.summaryTitle}>Aptitudes:</Text>
+                <Text style={s.summaryTitle}>Aptitudes</Text>
                 <View style={s.skillsRow}>
                   {skills.slice(0, 3).map((skill: string, idx: number) => (
-                    <View key={idx} style={[s.skillChip, { backgroundColor: colors.primary + '15' }]}><Text style={s.skillText}>{skill}</Text></View>
+                    <View key={idx} style={s.skillChip}><Text style={s.skillText}>{skill}</Text></View>
                   ))}
                   {skills.length > 3 && <Text style={s.moreText}>+{skills.length - 3}</Text>}
                 </View>
               </View>
             )}
           </View>
+
           <View style={s.footerHint}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.textLight} />
-            <Text style={s.footerHintText}>Toca para ver perfil completo</Text>
+            <Ionicons name="hand-left-outline" size={13} color={colors.textLight} />
+            <Text style={s.footerHintText}>Toca para ver el perfil completo</Text>
           </View>
         </View>
       );
     }
   };
 
-  const s = makeStyles(colors, isDark);
-
   if (loading) {
-    return <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>;
+    return (
+      <View style={s.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
   }
 
   return (
@@ -302,21 +286,21 @@ export default function HomeScreen({ navigation }: Props) {
             cardIndex={0}
             backgroundColor="transparent"
             stackSize={3}
-            cardVerticalMargin={10}
+            cardVerticalMargin={14}
             animateOverlayLabelsOpacity
             animateCardOpacity
             overlayLabels={{
               left: {
                 title: 'NOPE',
                 style: {
-                  label: { backgroundColor: colors.reject, color: '#FFFFFF', fontSize: 24, borderRadius: 10 },
+                  label: { backgroundColor: colors.reject, color: colors.white, fontSize: 22, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6, fontFamily: FONTS.extrabold, letterSpacing: 2 },
                   wrapper: { flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 30, marginLeft: -30 }
                 }
               },
               right: {
                 title: 'LIKE',
                 style: {
-                  label: { backgroundColor: colors.accept, color: '#FFFFFF', fontSize: 24, borderRadius: 10 },
+                  label: { backgroundColor: colors.accept, color: colors.white, fontSize: 22, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6, fontFamily: FONTS.extrabold, letterSpacing: 2 },
                   wrapper: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', marginTop: 30, marginLeft: 30 }
                 }
               }
@@ -324,23 +308,30 @@ export default function HomeScreen({ navigation }: Props) {
           />
         </View>
       ) : (
-        <View style={s.emptyContainer}>
-          <Ionicons name="planet-outline" size={80} color={colors.primary + '30'} />
-          <Text style={s.emptyText}>Has visto todas las opciones de hoy.</Text>
-          
-          <TouchableOpacity 
-            style={[s.clearDecisionsBtn, resetting && { opacity: 0.7 }]} 
+        <FadeInUp style={s.emptyContainer}>
+          <View style={s.emptyIconWrap}>
+            <Ionicons name="sparkles-outline" size={48} color={colors.primary} />
+          </View>
+          <Text style={s.emptyTitle}>Estás al día</Text>
+          <Text style={s.emptySubtitle}>Has revisado todas las opciones disponibles por ahora.</Text>
+
+          <PressScale style={s.reloadButton} onPress={fetchCards}>
+            <Ionicons name="refresh" size={18} color={isDark ? '#000' : '#fff'} />
+            <Text style={s.reloadText}>Refrescar feed</Text>
+          </PressScale>
+
+          <TouchableOpacity
+            style={[s.clearDecisionsBtn, resetting && { opacity: 0.6 }]}
             onPress={handleClearDecisions}
             disabled={resetting}
           >
-            {resetting ? <ActivityIndicator color={colors.primary} size="small" /> : <Text style={s.clearDecisionsText}>Reiniciar descartes / Borrar antiguas decisiones</Text>}
+            {resetting ? (
+              <ActivityIndicator color={colors.primary} size="small" />
+            ) : (
+              <Text style={s.clearDecisionsText}>Reiniciar mis descartes anteriores</Text>
+            )}
           </TouchableOpacity>
-
-          <TouchableOpacity style={s.reloadButton} onPress={fetchCards}>
-            <Ionicons name="refresh" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={s.reloadText}>Refrescar feed</Text>
-          </TouchableOpacity>
-        </View>
+        </FadeInUp>
       )}
     </View>
   );
@@ -350,61 +341,94 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   swiperContainer: { flex: 1 },
+
   card: {
-    height: '92%',
-    borderRadius: SIZES.radius_lg,
-    borderWidth: isDark ? 1 : 0,
+    height: '93%',
+    borderRadius: SIZES.radius_xl,
+    borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.card,
     ...(isDark ? {} : SHADOWS.medium),
     overflow: 'hidden',
   },
-  imageBadgeContainer: { width: '100%', height: '48%', position: 'relative' },
+  imageBadgeContainer: { width: '100%', height: '46%', position: 'relative', backgroundColor: colors.inputBackground },
   cardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  salaryBadge: {
-    position: 'absolute', bottom: 12, right: 12,
-    backgroundColor: colors.accept, paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, ...SHADOWS.light,
+  imageScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.05)',
   },
-  salaryText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  salaryBadge: {
+    position: 'absolute', bottom: 14, right: 14,
+    flexDirection: 'row', alignItems: 'baseline',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: SIZES.radius_full,
+  },
+  salaryCurrency: { ...type.small, color: isDark ? '#000' : '#fff', marginRight: 2, opacity: 0.7 },
+  salaryText: { ...type.h3, color: isDark ? '#000' : '#fff' },
 
   cardContent: { padding: SIZES.lg, flex: 1 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
-  cardTitle: { fontSize: 22, fontWeight: 'bold', color: colors.text },
-  cardSubtitle: { fontSize: 15, color: colors.textLight, marginTop: 2 },
-  
-  locationChip: { 
-    flexDirection: 'row', alignItems: 'center', gap: 4, 
-    backgroundColor: colors.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 
+  cardTitle: { ...type.h1, color: colors.text },
+  cardSubtitle: { ...type.body, color: colors.textLight, marginTop: 2 },
+
+  locationChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: isDark ? 'rgba(232,197,108,0.10)' : 'rgba(10,10,10,0.06)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: SIZES.radius_full,
+    maxWidth: 140,
   },
-  locationText: { color: colors.primary, fontSize: 11, fontWeight: '600' },
+  locationText: { ...type.caption, color: colors.primary },
 
   divider: { height: 1, backgroundColor: colors.border, marginVertical: SIZES.md },
-  
-  detailGrid: { flexDirection: 'row', gap: 15, marginBottom: SIZES.md, flexWrap: 'wrap' },
-  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: '40%' },
-  detailText: { fontSize: 13, color: colors.textLight, fontWeight: '600' },
 
-  summaryTitle: { fontSize: 12, textTransform: 'uppercase', color: colors.textLight, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
-  cardDescription: { fontSize: 14, color: colors.text, lineHeight: 20, marginBottom: SIZES.md },
+  detailGrid: { flexDirection: 'row', gap: 16, marginBottom: SIZES.md, flexWrap: 'wrap' },
+  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: '40%' },
+  detailIcon: {
+    width: 26, height: 26, borderRadius: 13,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.10)' : 'rgba(10,10,10,0.05)',
+  },
+  detailText: { ...type.small, color: colors.text },
+
+  summaryTitle: { ...type.overline, color: colors.textLight, marginBottom: 6 },
+  cardDescription: { ...type.body, color: colors.text, marginBottom: SIZES.md },
 
   reqContainer: { marginTop: 4 },
-  skillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4, alignItems: 'center' },
-  skillChip: { backgroundColor: colors.inputBackground, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  skillText: { fontSize: 11, color: colors.text, fontWeight: '500' },
-  moreText: { fontSize: 11, color: colors.textLight, fontWeight: '600' },
+  skillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
+  skillChip: {
+    backgroundColor: colors.inputBackground,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: SIZES.radius_full,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  skillText: { ...type.caption, color: colors.text },
+  moreText: { ...type.caption, color: colors.textLight },
 
-  footerHint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, backgroundColor: colors.inputBackground },
-  footerHintText: { fontSize: 12, color: colors.textLight, fontStyle: 'italic' },
+  footerHint: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 12,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  footerHintText: { ...type.caption, color: colors.textLight },
 
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SIZES.xl },
-  emptyText: { fontSize: 18, color: colors.text, fontWeight: '600', marginTop: SIZES.xl, textAlign: 'center' },
-  clearDecisionsBtn: { marginTop: SIZES.xl, padding: SIZES.md },
-  clearDecisionsText: { color: colors.primary, fontWeight: '600', fontSize: 14, textDecorationLine: 'underline' },
-  reloadButton: { 
-    marginTop: SIZES.md, flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SIZES.xl, paddingVertical: SIZES.md, 
-    backgroundColor: colors.primary, borderRadius: SIZES.radius_lg 
+  emptyIconWrap: {
+    width: 88, height: 88, borderRadius: 44,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.08)' : 'rgba(10,10,10,0.04)',
+    borderWidth: 1, borderColor: colors.border,
+    marginBottom: SIZES.lg,
   },
-  reloadText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }
+  emptyTitle: { ...type.h1, color: colors.text, textAlign: 'center' },
+  emptySubtitle: { ...type.body, color: colors.textLight, textAlign: 'center', marginTop: 8, maxWidth: 280 },
+  reloadButton: {
+    marginTop: SIZES.xl, flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SIZES.xl, paddingVertical: 14,
+    backgroundColor: colors.primary, borderRadius: SIZES.radius_full,
+  },
+  reloadText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  clearDecisionsBtn: { marginTop: SIZES.lg, padding: SIZES.sm },
+  clearDecisionsText: { ...type.small, color: colors.textLight, textDecorationLine: 'underline' },
 });

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
-  ActivityIndicator, RefreshControl
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { SIZES, SHADOWS } from '../../constants/theme';
+import { SIZES, SHADOWS, type } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../../navigation/MainNavigator';
+import { FadeInUp } from '../../components/common/Animated';
 
 type NavProp = NativeStackNavigationProp<MainStackParamList>;
 
@@ -22,12 +23,7 @@ interface Conversation {
   participants: string[];
   applicationId?: string;
   jobTitle: string;
-  otherUser?: {
-    id: string;
-    name: string;
-    photoURL: string;
-    profession?: string;
-  };
+  otherUser?: { id: string; name: string; photoURL: string; profession?: string; };
   unreadCount: number;
   statusViewed?: boolean;
 }
@@ -48,15 +44,13 @@ export default function MessagesScreen() {
     const q = query(
       collection(db, 'conversations'),
       where('participants', 'array-contains', userProfile.uid)
-      // Removed orderBy to avoid index requirement
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const convos = await Promise.all(snapshot.docs.map(async (d) => {
         const data = d.data();
         const otherUserId = data.participants.find((p: string) => p !== userProfile.uid);
-        
-        // Fetch other user details
+
         const userSnap = await getDoc(doc(db, 'users', otherUserId));
         const userData = userSnap.exists() ? userSnap.data() : { name: 'Usuario', photoURL: '' };
 
@@ -66,14 +60,13 @@ export default function MessagesScreen() {
           otherUser: {
             id: otherUserId,
             name: userData.name,
-            photoURL: userData.photoURL || data.jobImageUrl, // Prioritize user photo, fallback to job photo
+            photoURL: userData.photoURL || data.jobImageUrl,
             profession: userData.profession,
           },
           unreadCount: data[`unreadCount_${userProfile.uid}`] || 0,
         } as Conversation;
       }));
 
-      // Client-side sort by lastMessageAt desc
       convos.sort((a, b) => {
         const timeA = a.lastMessageAt?.seconds || 0;
         const timeB = b.lastMessageAt?.seconds || 0;
@@ -95,108 +88,106 @@ export default function MessagesScreen() {
   });
 
   const handlePressChat = async (convo: Conversation) => {
-    // Reset unread count
     try {
       await updateDoc(doc(db, 'conversations', convo.id), {
-        [`unreadCount_${userProfile?.uid}`]: 0
+        [`unreadCount_${userProfile?.uid}`]: 0,
       });
-    } catch {}
-
+    } catch { }
     navigation.navigate('Chat', {
       applicationId: convo.applicationId,
       otherUserId: convo.otherUser!.id,
-      jobTitle: convo.jobTitle
+      jobTitle: convo.jobTitle,
     });
   };
 
-  const renderConversation = ({ item }: { item: Conversation }) => (
-    <TouchableOpacity style={styles.row} onPress={() => handlePressChat(item)} activeOpacity={0.7}>
-      <TouchableOpacity 
-        onPress={() => navigation.navigate('Detail', { id: item.otherUser!.id, type: 'Candidate' })}
-      >
-        <Image 
-          source={{ uri: item.otherUser?.photoURL || 'https://via.placeholder.com/80.png?text=User' }} 
-          style={styles.avatar} 
-        />
-      </TouchableOpacity>
-      
-      <View style={styles.convoInfo}>
-        <View style={styles.rowTop}>
-          <Text style={styles.name} numberOfLines={1}>{item.otherUser?.name}</Text>
-          <Text style={styles.time}>
-            {item.lastMessageAt?.toDate ? item.lastMessageAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-          </Text>
-        </View>
-        
-        <View style={styles.rowBottom}>
-          <View style={styles.msgPreviewContainer}>
-            {item.applicationId && (
-              <Text style={styles.jobTag} numberOfLines={1}>[{item.jobTitle}]</Text>
-            )}
-            <Text style={[styles.lastMsg, item.unreadCount > 0 && styles.unreadMsg]} numberOfLines={1}>
-              {item.lastMessage}
+  const styles = makeStyles(colors, isDark);
+
+  const renderConversation = ({ item, index }: { item: Conversation; index: number }) => (
+    <FadeInUp delay={Math.min(index * 35, 250)}>
+      <TouchableOpacity style={styles.row} onPress={() => handlePressChat(item)} activeOpacity={0.75}>
+        <TouchableOpacity onPress={() => navigation.navigate('Detail', { id: item.otherUser!.id, type: 'Candidate' })}>
+          <View style={styles.avatarRing}>
+            <Image
+              source={{ uri: item.otherUser?.photoURL || 'https://via.placeholder.com/80.png?text=User' }}
+              style={styles.avatar}
+            />
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.convoInfo}>
+          <View style={styles.rowTop}>
+            <Text style={styles.name} numberOfLines={1}>{item.otherUser?.name}</Text>
+            <Text style={styles.time}>
+              {item.lastMessageAt?.toDate ? item.lastMessageAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
             </Text>
           </View>
-          {item.unreadCount > 0 && (
-            <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.unreadCountText}>{item.unreadCount}</Text>
+
+          <View style={styles.rowBottom}>
+            <View style={styles.msgPreviewContainer}>
+              {item.applicationId && (
+                <Text style={styles.jobTag} numberOfLines={1}>· {item.jobTitle}</Text>
+              )}
+              <Text style={[styles.lastMsg, item.unreadCount > 0 && styles.unreadMsg]} numberOfLines={1}>
+                {item.lastMessage}
+              </Text>
             </View>
-          )}
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadCountText}>{item.unreadCount}</Text>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
+    </FadeInUp>
+  );
+
+  const totalUnread = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
+  const appliedUnread = conversations.filter(c => !!c.applicationId).reduce((acc, c) => acc + c.unreadCount, 0);
+  const directUnread = conversations.filter(c => !c.applicationId).reduce((acc, c) => acc + c.unreadCount, 0);
+  const isSearching = userProfile?.userType === 'Searching';
+
+  const Tab = ({ id, label, count }: { id: typeof activeTab; label: string; count: number }) => (
+    <TouchableOpacity
+      style={[styles.tab, activeTab === id && styles.activeTab]}
+      onPress={() => setActiveTab(id)}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.tabText, activeTab === id && styles.activeTabText]}>
+        {label}{count > 0 ? ` · ${count}` : ''}
+      </Text>
     </TouchableOpacity>
   );
 
-  const styles = makeStyles(colors);
-
-  const totalUnread = conversations.reduce((acc, curr) => acc + curr.unreadCount, 0);
-  const appliedUnread = conversations.filter(c => !!c.applicationId).reduce((acc, curr) => acc + curr.unreadCount, 0);
-  const directUnread = conversations.filter(c => !c.applicationId).reduce((acc, curr) => acc + curr.unreadCount, 0);
-  const isSearching = userProfile?.userType === 'Searching';
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
-          onPress={() => setActiveTab('all')}
-        >
-          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
-            Todos{totalUnread > 0 ? ` (${totalUnread})` : ''}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'applied' && styles.activeTab]}
-          onPress={() => setActiveTab('applied')}
-        >
-          <Text style={[styles.tabText, activeTab === 'applied' && styles.activeTabText]}>
-            {isSearching ? 'Aplicados' : 'Candidatos'}
-            {appliedUnread > 0 ? ` (${appliedUnread})` : ''}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'direct' && styles.activeTab]}
-          onPress={() => setActiveTab('direct')}
-        >
-          <Text style={[styles.tabText, activeTab === 'direct' && styles.activeTabText]}>
-            {isSearching ? 'Propuestas' : 'Directo'}
-            {directUnread > 0 ? ` (${directUnread})` : ''}
-          </Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Mensajes</Text>
+      </View>
+
+      <View style={styles.tabBar}>
+        <Tab id="all" label="Todos" count={totalUnread} />
+        <Tab id="applied" label={isSearching ? 'Aplicados' : 'Candidatos'} count={appliedUnread} />
+        <Tab id="direct" label={isSearching ? 'Propuestas' : 'Directo'} count={directUnread} />
       </View>
 
       {loading && conversations.length === 0 ? (
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       ) : filteredConversations.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="chatbox-ellipses-outline" size={64} color={colors.textLight} />
-          <Text style={styles.emptyText}>No hay conversaciones aquí</Text>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="chatbubbles-outline" size={36} color={colors.primary} />
+          </View>
+          <Text style={styles.emptyText}>Sin conversaciones</Text>
+          <Text style={styles.emptySubtext}>Tus chats aparecerán aquí.</Text>
         </View>
       ) : (
         <FlatList
           data={filteredConversations}
           renderItem={renderConversation}
           keyExtractor={item => item.id}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={{ paddingVertical: 6 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(true)} tintColor={colors.primary} />}
         />
       )}
@@ -204,28 +195,65 @@ export default function MessagesScreen() {
   );
 }
 
-const makeStyles = (colors: any) => StyleSheet.create({
-  container: { flex: 1 },
+const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabBar: { flexDirection: 'row', borderBottomWidth: 1, paddingHorizontal: 10 },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 15, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  activeTab: { borderBottomColor: colors.primary },
-  tabText: { fontSize: 14, fontWeight: '600', color: colors.textLight },
-  activeTabText: { color: colors.primary },
-  
-  row: { flexDirection: 'row', padding: 15, alignItems: 'center', gap: 15 },
-  avatar: { width: 55, height: 55, borderRadius: 27.5, backgroundColor: '#eee' },
+
+  header: {
+    paddingHorizontal: SIZES.lg, paddingTop: SIZES.md, paddingBottom: SIZES.sm,
+    backgroundColor: colors.headerBg,
+  },
+  headerTitle: { ...type.display, color: colors.text },
+
+  tabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: SIZES.md, paddingBottom: SIZES.sm,
+    gap: 6,
+    backgroundColor: colors.headerBg,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  tab: {
+    paddingVertical: 8, paddingHorizontal: 14,
+    borderRadius: SIZES.radius_full,
+    backgroundColor: 'transparent',
+  },
+  activeTab: { backgroundColor: colors.primary },
+  tabText: { ...type.small, color: colors.textLight },
+  activeTabText: { color: isDark ? '#000' : '#fff' },
+
+  row: { flexDirection: 'row', paddingHorizontal: SIZES.lg, paddingVertical: 14, alignItems: 'center', gap: 14 },
+  avatarRing: {
+    padding: 2, borderRadius: 32,
+    borderWidth: 1.5, borderColor: colors.border,
+  },
+  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.inputBackground },
+
   convoInfo: { flex: 1, justifyContent: 'center' },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: 16, fontWeight: 'bold', color: colors.text },
-  time: { fontSize: 12, color: colors.textLight },
-  rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  name: { ...type.h3, color: colors.text },
+  time: { ...type.caption, color: colors.textLight },
+  rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 8 },
   msgPreviewContainer: { flex: 1 },
-  jobTag: { fontSize: 11, color: colors.primary, fontWeight: 'bold', marginBottom: 2 },
-  lastMsg: { fontSize: 14, color: colors.textLight },
-  unreadMsg: { color: colors.text, fontWeight: '600' },
-  unreadBadge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  unreadCountText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
-  emptyText: { marginTop: 15, color: colors.textLight, fontSize: 16 },
+  jobTag: { ...type.caption, color: colors.primary, marginBottom: 2 },
+  lastMsg: { ...type.body, color: colors.textLight },
+  unreadMsg: { color: colors.text, fontFamily: type.bodyMd.fontFamily },
+  unreadBadge: {
+    minWidth: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7,
+    backgroundColor: colors.primary,
+  },
+  unreadCountText: { ...type.caption, color: isDark ? '#000' : '#fff' },
+
+  separator: { height: 1, marginLeft: SIZES.lg + 60, backgroundColor: colors.border, opacity: 0.5 },
+
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  emptyIconWrap: {
+    width: 76, height: 76, borderRadius: 38,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.08)' : 'rgba(10,10,10,0.04)',
+    borderWidth: 1, borderColor: colors.border,
+    marginBottom: SIZES.md,
+  },
+  emptyText: { ...type.h2, color: colors.text },
+  emptySubtext: { ...type.body, color: colors.textLight, marginTop: 4 },
 });

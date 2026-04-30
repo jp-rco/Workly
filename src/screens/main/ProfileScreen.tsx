@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, Linking, LayoutAnimation } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
+  ActivityIndicator, Alert, Linking, LayoutAnimation,
+} from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { SIZES, SHADOWS } from '../../constants/theme';
+import { SIZES, SHADOWS, type } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList, MainTabParamList } from '../../navigation/MainNavigator';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CompositeNavigationProp } from '@react-navigation/native';
-import { collection, query, where, getDocs, doc, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useEffect } from 'react';
+import { FadeInUp, PressScale } from '../../components/common/Animated';
 
 type ProfileScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Profile'>,
@@ -34,13 +38,9 @@ export default function ProfileScreen({ navigation }: Props) {
         const q = query(
           collection(db, 'applications'),
           where(userProfile.userType === 'Searching' ? 'userId' : 'recruiterId', '==', userProfile.uid)
-          // Removed status filter here to avoid requiring a composite index.
         );
         const snap = await getDocs(q);
-        
-        // Filter history client-side for 'completed' status
         const completedSnap = snap.docs.filter(d => d.data().status === 'completed');
-
         const enriched = await Promise.all(completedSnap.map(async (d) => {
           const app = d.data();
           let jData = {};
@@ -66,8 +66,8 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const handleSwitchRole = async () => {
     Alert.alert(
-      'Cambiar Rol',
-      `¿Estás seguro que quieres cambiar a modo ${isSearching ? 'Reclutador' : 'Candidato'}? Esto cambiará tu feed y opciones principales.`,
+      'Cambiar rol',
+      `¿Cambiar a modo ${isSearching ? 'Reclutador' : 'Candidato'}? Tu feed y opciones cambiarán.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -77,13 +77,13 @@ export default function ProfileScreen({ navigation }: Props) {
             try {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               await switchRole();
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'No se pudo cambiar el rol');
             } finally {
               setSwitching(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -91,91 +91,87 @@ export default function ProfileScreen({ navigation }: Props) {
   const s = makeStyles(colors, isDark);
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
-
-      {/* ─── HEADER ─── */}
-      <View style={s.header}>
+    <ScrollView style={s.container} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      {/* HEADER */}
+      <FadeInUp>
         <View style={s.topControls}>
-          <TouchableOpacity style={s.themeBtn} onPress={toggleTheme} activeOpacity={0.7}>
-            <Ionicons
-              name={isDark ? 'sunny' : 'moon'}
-              size={20}
-              color={isDark ? '#FBBF24' : colors.primary}
-            />
+          <TouchableOpacity style={s.iconBtn} onPress={toggleTheme} activeOpacity={0.7}>
+            <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={colors.text} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[s.roleSwitchBtn, { backgroundColor: isSearching ? colors.primary + '15' : colors.accept + '15' }]} 
+          <TouchableOpacity
+            style={s.roleSwitchBtn}
             onPress={handleSwitchRole}
             disabled={switching}
+            activeOpacity={0.85}
           >
             {switching ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <>
-                <Ionicons 
-                  name={isSearching ? "briefcase-outline" : "person-outline"} 
-                  size={16} 
-                  color={isSearching ? colors.primary : colors.accept} 
+                <Ionicons
+                  name={isSearching ? 'briefcase-outline' : 'person-outline'}
+                  size={14}
+                  color={colors.text}
                 />
-                <Text style={[s.roleSwitchText, { color: isSearching ? colors.primary : colors.accept }]}>
-                  {isSearching ? '¡Necesito contratar!' : '¡Busco trabajo!'}
+                <Text style={s.roleSwitchText}>
+                  {isSearching ? 'Necesito contratar' : 'Busco trabajo'}
                 </Text>
               </>
             )}
           </TouchableOpacity>
         </View>
 
-        <Image
-          source={{ uri: userProfile.photoURL || 'https://via.placeholder.com/150.png?text=Foto' }}
-          style={s.avatar}
-        />
-        <Text style={s.name}>{userProfile.name}</Text>
-        <Text style={s.roleLabel}>
-          {isSearching ? userProfile.profession || 'Profesional' : (userProfile.companyName || 'Reclutador / Empresa')}
-        </Text>
-        {isSearching && userProfile.city ? (
-          <View style={s.locationRow}>
-            <Ionicons name="location-outline" size={14} color={colors.textLight} />
-            <Text style={s.locationLabel}>{userProfile.city}</Text>
+        <View style={s.heroCard}>
+          <View style={s.avatarRing}>
+            <Image
+              source={{ uri: userProfile.photoURL || 'https://via.placeholder.com/200.png?text=Foto' }}
+              style={s.avatar}
+            />
           </View>
-        ) : null}
-      </View>
+          <Text style={s.name}>{userProfile.name}</Text>
+          <Text style={s.roleLabel}>
+            {isSearching ? userProfile.profession || 'Profesional' : (userProfile.companyName || 'Reclutador')}
+          </Text>
+          {isSearching && userProfile.city ? (
+            <View style={s.locationRow}>
+              <Ionicons name="location-outline" size={13} color={colors.textLight} />
+              <Text style={s.locationLabel}>{userProfile.city}</Text>
+            </View>
+          ) : null}
 
-      {/* ─── ACTION BUTTONS ─── */}
-      <View style={s.actions}>
-        <TouchableOpacity style={s.actionBtn} onPress={() => navigation.navigate('EditProfile')}>
-          <Ionicons name="create-outline" size={20} color={colors.primary} />
-          <Text style={s.actionBtnText}>Editar Perfil</Text>
-        </TouchableOpacity>
+          <View style={s.heroActions}>
+            <PressScale style={s.primaryBtn} onPress={() => navigation.navigate('EditProfile')}>
+              <Ionicons name="create-outline" size={16} color={isDark ? '#000' : '#fff'} />
+              <Text style={s.primaryBtnText}>Editar perfil</Text>
+            </PressScale>
+            <TouchableOpacity style={s.ghostBtn} onPress={logout} activeOpacity={0.8}>
+              <Ionicons name="log-out-outline" size={18} color={colors.reject} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </FadeInUp>
 
-        <TouchableOpacity style={[s.actionBtn, { borderColor: colors.reject }]} onPress={logout}>
-          <Ionicons name="log-out-outline" size={20} color={colors.reject} />
-          <Text style={[s.actionBtnText, { color: colors.reject }]}>Cerrar Sesión</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── CONTENT SECTION ─── */}
-      <View style={s.section}>
+      {/* CONTENT */}
+      <FadeInUp delay={80} style={s.section}>
         {isSearching ? (
           <>
-            <Text style={s.sectionTitle}>Sobre Mí</Text>
+            <Text style={s.sectionTitle}>Sobre mí</Text>
             <Text style={s.sectionText}>{userProfile.bio || 'Aún no has escrito tu biografía.'}</Text>
 
             {userProfile.jobDescription ? (
               <>
-                <Text style={s.sectionTitle}>Trabajo Buscado</Text>
+                <Text style={s.sectionTitle}>Trabajo buscado</Text>
                 <Text style={s.sectionText}>{userProfile.jobDescription}</Text>
               </>
             ) : null}
 
             <Text style={s.sectionTitle}>Habilidades</Text>
-            <View style={s.listContainer}>
+            <View style={s.chipsWrap}>
               {userProfile.skills && userProfile.skills.length > 0 ? (
                 userProfile.skills.map((skill, i) => (
-                  <View key={i} style={s.listItem}>
-                    <Text style={s.bulletPoint}>•</Text>
-                    <Text style={s.listItemText}>{skill}</Text>
+                  <View key={i} style={s.chip}>
+                    <Text style={s.chipText}>{skill}</Text>
                   </View>
                 ))
               ) : (
@@ -184,38 +180,36 @@ export default function ProfileScreen({ navigation }: Props) {
             </View>
 
             {userProfile.resumeURL && (
-              <>
-                <Text style={s.sectionTitle}>Documentos</Text>
-                <TouchableOpacity style={s.cvButton} onPress={() => Linking.openURL(userProfile.resumeURL!)}>
-                  <Ionicons name="document-text" size={20} color="#FFFFFF" />
-                  <Text style={s.cvButtonText}>Ver Hoja de Vida (PDF)</Text>
-                </TouchableOpacity>
-              </>
+              <PressScale style={s.cvButton} onPress={() => Linking.openURL(userProfile.resumeURL!)}>
+                <Ionicons name="document-text" size={18} color={isDark ? '#000' : '#fff'} />
+                <Text style={s.cvButtonText}>Ver hoja de vida (PDF)</Text>
+                <Ionicons name="open-outline" size={16} color={isDark ? '#000' : '#fff'} style={{ marginLeft: 'auto' }} />
+              </PressScale>
             )}
           </>
         ) : (
           <>
-            <Text style={s.sectionTitle}>Acerca de la Empresa</Text>
+            <Text style={s.sectionTitle}>Acerca de la empresa</Text>
             <Text style={s.sectionText}>{userProfile.companyDescription || 'Aún no has descrito a tu empresa.'}</Text>
 
-            <Text style={s.sectionTitle}>Detalles Corporativos</Text>
+            <Text style={s.sectionTitle}>Detalles</Text>
             <View style={s.infoGrid}>
               <View style={s.infoItem}>
                 <Text style={s.infoLabel}>Industria</Text>
-                <Text style={s.infoValue}>{userProfile.industry || 'No especificada'}</Text>
+                <Text style={s.infoValue}>{userProfile.industry || '—'}</Text>
               </View>
               <View style={s.infoItem}>
                 <Text style={s.infoLabel}>Ubicación</Text>
-                <Text style={s.infoValue}>{userProfile.location || 'No especificada'}</Text>
+                <Text style={s.infoValue}>{userProfile.location || '—'}</Text>
               </View>
             </View>
           </>
         )}
-      </View>
+      </FadeInUp>
 
-      {/* ─── HISTORY SECTION ─── */}
-      <View style={[s.section, { marginTop: SIZES.lg }]}>
-        <Text style={s.sectionTitle}>Historial de Trabajo</Text>
+      {/* HISTORY */}
+      <FadeInUp delay={140} style={[s.section, { marginTop: SIZES.md }]}>
+        <Text style={s.sectionTitle}>Historial de trabajo</Text>
         {loadingHistory ? (
           <ActivityIndicator color={colors.primary} style={{ margin: 20 }} />
         ) : history.length === 0 ? (
@@ -238,8 +232,7 @@ export default function ProfileScreen({ navigation }: Props) {
             </View>
           ))
         )}
-      </View>
-
+      </FadeInUp>
     </ScrollView>
   );
 }
@@ -248,80 +241,93 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: SIZES.lg, paddingBottom: SIZES.xxl },
 
-  header: { alignItems: 'center', marginBottom: SIZES.xl },
-  topControls: { 
-    flexDirection: 'row', justifyContent: 'space-between', width: '100%', 
-    alignItems: 'center', marginBottom: SIZES.sm 
+  topControls: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: SIZES.md,
   },
-  
-  themeBtn: {
-    backgroundColor: colors.inputBackground,
+  iconBtn: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
   },
-
   roleSwitchBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 20, 
-    borderWidth: 1, 
-  },
-  roleSwitchText: { fontSize: 13, fontWeight: '700' },
-
-  avatar: {
-    width: 110, height: 110, borderRadius: 55,
-    marginTop: SIZES.sm, marginBottom: SIZES.md,
-    borderWidth: 3, borderColor: colors.primary + '20',
-  },
-  name: { fontSize: 24, fontWeight: 'bold', color: colors.text },
-  roleLabel: { fontSize: 16, color: colors.textLight, marginTop: 4, fontWeight: '500' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  locationLabel: { fontSize: 13, color: colors.textLight },
-
-  actions: { flexDirection: 'row', gap: 10, marginBottom: SIZES.xl },
-  actionBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 12, borderRadius: SIZES.radius_lg,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: SIZES.radius_full,
     backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-    gap: 8,
   },
-  actionBtnText: { color: colors.text, fontWeight: '600', fontSize: 14 },
+  roleSwitchText: { ...type.small, color: colors.text },
+
+  heroCard: {
+    alignItems: 'center',
+    paddingVertical: SIZES.xl,
+    paddingHorizontal: SIZES.lg,
+    borderRadius: SIZES.radius_xl,
+    backgroundColor: colors.card,
+    borderWidth: 1, borderColor: colors.border,
+    ...(isDark ? {} : SHADOWS.light),
+    marginBottom: SIZES.md,
+  },
+  avatarRing: {
+    padding: 4, borderRadius: 70,
+    borderWidth: 2, borderColor: colors.primary,
+    marginBottom: SIZES.md,
+  },
+  avatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.inputBackground },
+  name: { ...type.h1, color: colors.text },
+  roleLabel: { ...type.bodyMd, color: colors.textLight, marginTop: 4 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  locationLabel: { ...type.small, color: colors.textLight },
+
+  heroActions: { flexDirection: 'row', gap: 10, marginTop: SIZES.lg, alignSelf: 'stretch' },
+  primaryBtn: {
+    flex: 1, flexDirection: 'row', gap: 8,
+    paddingVertical: 14, borderRadius: SIZES.radius_full,
+    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+  },
+  primaryBtnText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  ghostBtn: {
+    width: 48, height: 48, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+  },
 
   section: {
     backgroundColor: colors.card, padding: SIZES.lg,
-    borderRadius: SIZES.radius_lg,
-    borderWidth: isDark ? 1 : 0, borderColor: colors.border,
+    borderRadius: SIZES.radius_xl,
+    borderWidth: 1, borderColor: colors.border,
     ...(isDark ? {} : SHADOWS.light),
   },
-  sectionTitle: {
-    fontSize: 16, fontWeight: 'bold', color: colors.text,
-    marginBottom: SIZES.sm, marginTop: SIZES.lg,
-  },
-  sectionText: { fontSize: 14, color: colors.textLight, lineHeight: 22 },
+  sectionTitle: { ...type.overline, color: colors.textLight, marginTop: SIZES.md, marginBottom: SIZES.sm },
+  sectionText: { ...type.body, color: colors.text, lineHeight: 22 },
 
-  listContainer: { marginTop: 4, gap: 8 },
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bulletPoint: { fontSize: 18, color: colors.primary, marginTop: -2 },
-  listItemText: { fontSize: 14, color: colors.textLight, flex: 1 },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: SIZES.radius_full,
+    backgroundColor: colors.inputBackground,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  chipText: { ...type.caption, color: colors.text },
 
   cvButton: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: colors.primary, padding: 14,
-    borderRadius: SIZES.radius_lg, marginTop: SIZES.sm,
+    borderRadius: SIZES.radius_full, marginTop: SIZES.md,
   },
-  cvButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  cvButtonText: { ...type.button, color: isDark ? '#000' : '#fff' },
 
-  infoGrid: { flexDirection: 'row', gap: 15, marginTop: 4 },
+  infoGrid: { flexDirection: 'row', gap: 16, marginTop: 4 },
   infoItem: { flex: 1 },
-  infoLabel: { fontSize: 12, color: colors.textLight, marginBottom: 2 },
-  infoValue: { fontSize: 14, color: colors.text, fontWeight: '500' },
-  historyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
+  infoLabel: { ...type.caption, color: colors.textLight, marginBottom: 4 },
+  infoValue: { ...type.bodyMd, color: colors.text },
+
+  historyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   historyBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
   historyInfo: { flex: 1 },
-  historyTitle: { fontSize: 15, fontWeight: 'bold', color: colors.text },
-  historyDate: { fontSize: 12, color: colors.textLight, marginTop: 2 },
+  historyTitle: { ...type.h3, color: colors.text },
+  historyDate: { ...type.caption, color: colors.textLight, marginTop: 2 },
   historyResult: { alignItems: 'flex-end' },
-  historyValue: { fontSize: 15, fontWeight: 'bold', color: colors.primary },
-  historyLabel: { fontSize: 10, color: colors.textLight },
+  historyValue: { ...type.h3, color: colors.primary },
+  historyLabel: { ...type.caption, color: colors.textLight, marginTop: 2 },
 });

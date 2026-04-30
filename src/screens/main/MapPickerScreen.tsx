@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput, Platform
+  ActivityIndicator, Alert, TextInput,
 } from 'react-native';
 import MapView, { Marker } from '../../components/common/AppMap';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { SIZES, SHADOWS } from '../../constants/theme';
+import { SIZES, SHADOWS, type } from '../../constants/theme';
+import { PressScale } from '../../components/common/Animated';
 
 export interface PickedLocation {
   latitude: number;
@@ -23,10 +24,7 @@ interface Props {
 }
 
 export default function MapPickerScreen({
-  onLocationPicked,
-  onCancel,
-  initialLatitude,
-  initialLongitude,
+  onLocationPicked, onCancel, initialLatitude, initialLongitude,
 }: Props) {
   const { colors, isDark } = useTheme();
   const mapRef = useRef<MapView>(null);
@@ -51,17 +49,10 @@ export default function MapPickerScreen({
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        const coord = {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-        };
+        const coord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
         setMarkerCoord(coord);
         await reverseGeocode(coord.latitude, coord.longitude);
-        mapRef.current?.animateToRegion({
-          ...coord,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
+        mapRef.current?.animateToRegion({ ...coord, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 1000);
       } else {
         Alert.alert('Permiso de ubicación', 'Se usará ubicación por defecto (Bogotá)');
         await reverseGeocode(4.7110, -74.0721);
@@ -102,10 +93,7 @@ export default function MapPickerScreen({
         const coord = { latitude, longitude };
         setMarkerCoord(coord);
         await reverseGeocode(latitude, longitude);
-        mapRef.current?.animateToRegion(
-          { ...coord, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-          800
-        );
+        mapRef.current?.animateToRegion({ ...coord, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
       } else {
         Alert.alert('No encontrado', 'No se encontró esa dirección');
       }
@@ -128,7 +116,7 @@ export default function MapPickerScreen({
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
+        <Text style={styles.loadingText}>Obteniendo tu ubicación…</Text>
       </View>
     );
   }
@@ -136,18 +124,21 @@ export default function MapPickerScreen({
   return (
     <View style={styles.container}>
       <View style={styles.searchBar}>
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Buscar dirección..."
-          placeholderTextColor={colors.textLight}
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-          <Ionicons name="search" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.searchInputWrap}>
+          <Ionicons name="search-outline" size={18} color={colors.textLight} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar dirección o lugar"
+            placeholderTextColor={colors.textLight}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+        </View>
+        <PressScale style={styles.searchBtn} onPress={handleSearch}>
+          <Ionicons name="arrow-forward" size={20} color={isDark ? '#000' : '#fff'} />
+        </PressScale>
       </View>
 
       <MapView
@@ -155,11 +146,7 @@ export default function MapPickerScreen({
         style={styles.map}
         provider="google"
         userInterfaceStyle={isDark ? 'dark' : 'light'}
-        initialRegion={{
-          ...markerCoord,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
+        initialRegion={{ ...markerCoord, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
         onPress={handleMapPress}
         showsUserLocation
         showsMyLocationButton
@@ -168,25 +155,33 @@ export default function MapPickerScreen({
       </MapView>
 
       <View style={styles.footer}>
+        <View style={styles.handleBar} />
+
         <View style={styles.addressRow}>
-          <Ionicons name="location" size={20} color={colors.primary} />
+          <View style={styles.addrIcon}>
+            <Ionicons name="location" size={18} color={colors.primary} />
+          </View>
           {resolving ? (
-            <ActivityIndicator style={{ marginLeft: SIZES.sm }} color={colors.primary} />
+            <ActivityIndicator color={colors.primary} />
           ) : (
-            <Text style={styles.addressText} numberOfLines={2}>{address || 'Toca el mapa para seleccionar'}</Text>
+            <Text style={styles.addressText} numberOfLines={2}>
+              {address || 'Toca el mapa para seleccionar'}
+            </Text>
           )}
         </View>
+
         <View style={styles.footerButtons}>
           <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
             <Text style={styles.cancelText}>Cancelar</Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <PressScale
             style={[styles.confirmBtn, (!address || resolving) && styles.disabledBtn]}
             onPress={handleConfirm}
             disabled={!address || resolving}
           >
-            <Text style={styles.confirmText}>Confirmar Ubicación</Text>
-          </TouchableOpacity>
+            <Ionicons name="checkmark" size={18} color={isDark ? '#000' : '#fff'} />
+            <Text style={styles.confirmText}>Confirmar ubicación</Text>
+          </PressScale>
         </View>
       </View>
     </View>
@@ -195,43 +190,58 @@ export default function MapPickerScreen({
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, backgroundColor: colors.background },
-  loadingText: { color: colors.textLight, fontSize: 14 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14, backgroundColor: colors.background },
+  loadingText: { ...type.body, color: colors.textLight },
+
   searchBar: {
-    position: 'absolute', top: 12, left: 12, right: 12, zIndex: 10,
+    position: 'absolute', top: 16, left: 14, right: 14, zIndex: 10,
     flexDirection: 'row', gap: 8,
   },
-  searchInput: {
-    flex: 1, backgroundColor: colors.card, borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.md, paddingVertical: SIZES.sm,
-    fontSize: 14, color: colors.text,
-    borderWidth: isDark ? 1 : 0, borderColor: colors.border,
+  searchInputWrap: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.card, borderRadius: SIZES.radius_full,
+    paddingHorizontal: SIZES.md, paddingVertical: 10,
+    borderWidth: 1, borderColor: colors.border,
     ...(isDark ? {} : SHADOWS.medium),
   },
+  searchInput: { flex: 1, ...type.body, color: colors.text, padding: 0 },
   searchBtn: {
-    backgroundColor: colors.primary, borderRadius: SIZES.radius,
-    width: 44, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primary, borderRadius: SIZES.radius_full,
+    width: 46, height: 46, alignItems: 'center', justifyContent: 'center',
     ...(isDark ? {} : SHADOWS.light),
   },
+
   map: { flex: 1 },
+
   footer: {
-    backgroundColor: colors.card, padding: SIZES.lg,
-    borderTopLeftRadius: SIZES.radius_lg, borderTopRightRadius: SIZES.radius_lg,
-    borderWidth: isDark ? 1 : 0, borderColor: colors.border,
+    backgroundColor: colors.card, padding: SIZES.lg, paddingTop: 10,
+    borderTopLeftRadius: SIZES.radius_xl, borderTopRightRadius: SIZES.radius_xl,
+    borderTopWidth: 1, borderColor: colors.border,
     ...(isDark ? {} : SHADOWS.medium),
   },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SIZES.md },
-  addressText: { flex: 1, fontSize: 14, color: colors.text, fontWeight: '500' },
+  handleBar: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: colors.border, alignSelf: 'center', marginBottom: SIZES.md,
+  },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: SIZES.lg },
+  addrIcon: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.10)' : 'rgba(10,10,10,0.05)',
+  },
+  addressText: { flex: 1, ...type.bodyMd, color: colors.text },
+
   footerButtons: { flexDirection: 'row', gap: 12 },
   cancelBtn: {
-    flex: 1, padding: SIZES.md, borderRadius: SIZES.radius_lg,
+    flex: 1, paddingVertical: 14, borderRadius: SIZES.radius_full,
     borderWidth: 1, borderColor: colors.border, alignItems: 'center',
   },
-  cancelText: { color: colors.textLight, fontWeight: '600' },
+  cancelText: { ...type.button, color: colors.textLight },
   confirmBtn: {
-    flex: 2, padding: SIZES.md, borderRadius: SIZES.radius_lg,
-    backgroundColor: colors.primary, alignItems: 'center',
+    flex: 2, flexDirection: 'row', gap: 8,
+    paddingVertical: 14, borderRadius: SIZES.radius_full,
+    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
   },
-  disabledBtn: { backgroundColor: colors.border },
-  confirmText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 },
+  disabledBtn: { opacity: 0.4 },
+  confirmText: { ...type.button, color: isDark ? '#000' : '#fff' },
 });

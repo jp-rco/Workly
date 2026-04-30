@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert, Linking, Modal, Keyboard
+  KeyboardAvoidingView, Platform, Image, Linking, Modal, Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -12,37 +12,28 @@ import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
 import {
   collection, addDoc, query, where, onSnapshot,
-  serverTimestamp, setDoc, doc, increment, getDoc
+  serverTimestamp, setDoc, doc, increment, getDoc,
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import { SIZES } from '../../constants/theme';
-import * as Location from 'expo-location';
-import { 
-  useAudioRecorder, useAudioPlayer, useAudioPlayerStatus, 
-  RecordingPresets, requestRecordingPermissionsAsync 
+import { SIZES, type } from '../../constants/theme';
+import {
+  useAudioRecorder, useAudioPlayer, useAudioPlayerStatus,
+  RecordingPresets, requestRecordingPermissionsAsync,
 } from 'expo-audio';
 import { pickAndUploadImage, uploadToFirebase } from '../../utils/uploadImage';
 import MapPickerScreen from './MapPickerScreen';
+import { PressScale, Pulse } from '../../components/common/Animated';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Chat'>;
 
 interface Message {
-  id: string;
-  senderId: string;
-  text?: string;
-  imageUri?: string;
-  audioUri?: string;
-  location?: { latitude: number; longitude: number };
+  id: string; senderId: string; text?: string; imageUri?: string;
+  audioUri?: string; location?: { latitude: number; longitude: number };
   createdAt: any;
 }
-
 interface ApplicationData {
-  id: string;
-  status: string;
-  jobTitle: string;
-  jobId: string;
-  jobImageUrl?: string;
-  interviewDate?: string;
+  id: string; status: string; jobTitle: string; jobId: string;
+  jobImageUrl?: string; interviewDate?: string;
 }
 
 export default function ChatScreen({ route, navigation }: Props) {
@@ -54,21 +45,19 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [appData, setAppData] = useState<ApplicationData | null>(null);
 
-  // Audio state (expo-audio)
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
+  const styles = makeStyles(colors, isDark);
 
   useEffect(() => {
     if (!userProfile?.uid) return;
-    navigation.setOptions({ title: routeJobTitle || (appData?.jobTitle) || 'Chat' });
+    navigation.setOptions({ title: routeJobTitle || appData?.jobTitle || 'Chat' });
 
-    // Fetch Application Context if exists
     if (applicationId) {
       getDoc(doc(db, 'applications', applicationId)).then(async (snap) => {
         if (snap.exists()) {
@@ -79,42 +68,23 @@ export default function ChatScreen({ route, navigation }: Props) {
             if (jSnap.exists()) jobImageUrl = jSnap.data().imageUrl;
           }
           setAppData({
-            id: snap.id,
-            status: data.status,
-            jobTitle: data.jobTitle,
-            jobId: data.jobId,
-            jobImageUrl,
-            interviewDate: data.interviewDate,
+            id: snap.id, status: data.status, jobTitle: data.jobTitle,
+            jobId: data.jobId, jobImageUrl, interviewDate: data.interviewDate,
           });
         }
       });
     }
 
-    // Use applicationId if provided, otherwise a composite ID from both users
     const conversationId = applicationId ||
       (userProfile.uid < otherUserId ? `${userProfile.uid}_${otherUserId}` : `${otherUserId}_${userProfile.uid}`);
 
-    const q = query(
-      collection(db, 'messages'),
-      where('conversationId', '==', conversationId)
-    );
+    const q = query(collection(db, 'messages'), where('conversationId', '==', conversationId));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Message[];
-
-      // Sort newest first for inverted list
-      msgs.sort((a, b) => {
-        const timeA = a.createdAt?.seconds || 0;
-        const timeB = b.createdAt?.seconds || 0;
-        return timeB - timeA;
-      });
-
+      const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Message[];
+      msgs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setMessages(msgs);
     });
-
     return () => unsubscribe();
   }, [applicationId, otherUserId]);
 
@@ -124,29 +94,21 @@ export default function ChatScreen({ route, navigation }: Props) {
       (userProfile.uid < otherUserId ? `${userProfile.uid}_${otherUserId}` : `${otherUserId}_${userProfile.uid}`);
 
     try {
-      // 1. Add the message
       await addDoc(collection(db, 'messages'), {
-        conversationId,
-        applicationId: applicationId || null,
-        senderId: userProfile.uid,
-        createdAt: serverTimestamp(),
-        ...payload
+        conversationId, applicationId: applicationId || null,
+        senderId: userProfile.uid, createdAt: serverTimestamp(), ...payload,
       });
-
-      // 2. Update the conversation summary (for the messages list)
       await setDoc(doc(db, 'conversations', conversationId), {
         id: conversationId,
         lastMessage: payload.text || (payload.imageUri ? '📷 Imagen' : payload.audioUri ? '🎤 Nota de voz' : '📍 Ubicación'),
         lastMessageAt: serverTimestamp(),
         participants: [userProfile.uid, otherUserId],
         applicationId: applicationId || null,
-        jobTitle: routeJobTitle || (appData?.jobTitle) || 'Chat',
+        jobTitle: routeJobTitle || appData?.jobTitle || 'Chat',
         jobImageUrl: appData?.jobImageUrl || null,
-        // Update unread count for the recipient
         [`unreadCount_${otherUserId}`]: increment(1),
         [`unreadCount_${userProfile.uid}`]: 0,
       }, { merge: true });
-
     } catch (e) {
       console.error('Error sending message:', e);
     }
@@ -169,7 +131,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     setShowMapPicker(false);
     sendMessage({
       location: { latitude: loc.latitude, longitude: loc.longitude },
-      text: `📍 Ubicación: ${loc.address}`
+      text: `📍 Ubicación: ${loc.address}`,
     });
   };
 
@@ -209,12 +171,14 @@ export default function ChatScreen({ route, navigation }: Props) {
       <View style={[styles.messageWrapper, isMine ? styles.myMessage : styles.theirMessage]}>
         <View style={[
           styles.bubble,
-          isMine ? [styles.myBubble, { backgroundColor: colors.primary }] : [styles.theirBubble, { backgroundColor: colors.inputBackground }]
+          isMine ? styles.myBubble : styles.theirBubble,
         ]}>
-          {item.text && <Text style={[styles.messageText, isMine ? { color: '#FFFFFF' } : { color: colors.text }]}>{item.text}</Text>}
+          {item.text && (
+            <Text style={[styles.messageText, isMine ? styles.myText : styles.theirText]}>{item.text}</Text>
+          )}
           {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
           {item.audioUri && (
-            <VoiceMessagePlayer uri={item.audioUri} isMine={isMine} colors={colors} />
+            <VoiceMessagePlayer uri={item.audioUri} isMine={isMine} colors={colors} isDark={isDark} />
           )}
           {item.location && (
             <TouchableOpacity
@@ -224,37 +188,43 @@ export default function ChatScreen({ route, navigation }: Props) {
                 Linking.openURL(url);
               }}
             >
-              <Ionicons name="location" size={24} color={isMine ? '#FFFFFF' : colors.primary} />
-              <Text style={[styles.locationTextMsg, isMine ? { color: '#FFFFFF' } : { color: colors.text }]}>Ver ubicación</Text>
+              <Ionicons name="location" size={20} color={isMine ? (isDark ? '#000' : '#fff') : colors.primary} />
+              <Text style={[styles.locationTextMsg, isMine ? styles.myText : styles.theirText]}>Ver ubicación</Text>
             </TouchableOpacity>
           )}
         </View>
-        <Text style={styles.timeText}>{item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</Text>
+        <Text style={styles.timeText}>
+          {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+        </Text>
       </View>
     );
   };
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={headerHeight}
     >
       {appData && (
         <TouchableOpacity
-          style={[styles.contextCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
+          style={styles.contextCard}
           onPress={() => navigation.navigate('Detail', { id: appData.jobId, type: 'Job' })}
+          activeOpacity={0.85}
         >
-          <Image source={{ uri: appData.jobImageUrl || 'https://via.placeholder.com/60.png?text=Trabajo' }} style={styles.contextImage} />
+          <Image
+            source={{ uri: appData.jobImageUrl || 'https://via.placeholder.com/60.png?text=Trabajo' }}
+            style={styles.contextImage}
+          />
           <View style={styles.contextInfo}>
-            <Text style={[styles.contextTitle, { color: colors.text }]} numberOfLines={1}>{appData.jobTitle}</Text>
+            <Text style={styles.contextTitle} numberOfLines={1}>{appData.jobTitle}</Text>
             <View style={[styles.contextStatus, { backgroundColor: getStatusColor(appData.status, colors.primary) + '20' }]}>
               <Text style={[styles.contextStatusText, { color: getStatusColor(appData.status, colors.primary) }]}>
                 {getStatusLabel(appData.status)}
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
         </TouchableOpacity>
       )}
 
@@ -269,17 +239,17 @@ export default function ChatScreen({ route, navigation }: Props) {
         onScrollBeginDrag={Keyboard.dismiss}
       />
 
-      <View style={[styles.inputArea, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <TouchableOpacity style={styles.iconBtn} onPress={handleSendImage}>
-          <Ionicons name="image" size={26} color={colors.primary} />
+          <Ionicons name="image-outline" size={22} color={colors.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMapPicker(true)}>
-          <Ionicons name="location" size={26} color={colors.primary} />
+          <Ionicons name="location-outline" size={22} color={colors.text} />
         </TouchableOpacity>
 
         <TextInput
-          style={[styles.input, { color: colors.text, backgroundColor: colors.inputBackground }]}
-          placeholder="Mensaje..."
+          style={styles.input}
+          placeholder="Escribe un mensaje…"
           placeholderTextColor={colors.textLight}
           value={inputText}
           onChangeText={setInputText}
@@ -287,91 +257,128 @@ export default function ChatScreen({ route, navigation }: Props) {
         />
 
         {inputText.trim() ? (
-          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSendText}>
-            <Ionicons name="send" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <PressScale style={styles.sendBtn} onPress={handleSendText}>
+            <Ionicons name="arrow-up" size={20} color={isDark ? '#000' : '#fff'} />
+          </PressScale>
         ) : (
           <TouchableOpacity
-            style={[styles.micBtn, { backgroundColor: isRecording ? colors.reject : colors.primary }]}
+            style={[styles.micBtn, isRecording && styles.micBtnRecording]}
             onPressIn={startRecording}
             onPressOut={stopRecording}
+            activeOpacity={0.85}
           >
-            <Ionicons name={isRecording ? "mic-off" : "mic"} size={22} color="#FFFFFF" />
+            {isRecording ? (
+              <Pulse color="#fff" size={12} />
+            ) : (
+              <Ionicons name="mic" size={20} color={isDark ? '#000' : '#fff'} />
+            )}
           </TouchableOpacity>
         )}
       </View>
 
       <Modal visible={showMapPicker} animationType="slide">
-        <MapPickerScreen
-          onLocationPicked={onLocationPicked}
-          onCancel={() => setShowMapPicker(false)}
-        />
+        <MapPickerScreen onLocationPicked={onLocationPicked} onCancel={() => setShowMapPicker(false)} />
       </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-// Sub-component for better audio handling with expo-audio
-function VoiceMessagePlayer({ uri, isMine, colors }: { uri: string, isMine: boolean, colors: any }) {
+function VoiceMessagePlayer({ uri, isMine, colors, isDark }: { uri: string; isMine: boolean; colors: any; isDark: boolean }) {
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
 
   const handlePlay = () => {
-    if (status.didJustFinish) {
-      player.seekTo(0);
-    }
+    if (status.didJustFinish) player.seekTo(0);
     player.play();
   };
 
+  const fg = isMine ? (isDark ? '#000' : '#fff') : colors.primary;
+  const tx = isMine ? (isDark ? '#000' : '#fff') : colors.text;
+
   return (
-    <TouchableOpacity style={styles.audioBtn} onPress={handlePlay}>
-      <Ionicons
-        name={status.playing ? "pause-circle" : "play-circle"}
-        size={32}
-        color={isMine ? '#FFFFFF' : colors.primary}
-      />
-      <Text style={[styles.audioText, isMine ? { color: '#FFFFFF' } : { color: colors.text }]}>
-        {status.playing ? 'Reproduciendo...' : 'Nota de voz'}
+    <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 140 }} onPress={handlePlay}>
+      <Ionicons name={status.playing ? 'pause-circle' : 'play-circle'} size={32} color={fg} />
+      <Text style={{ ...type.small, color: tx }}>
+        {status.playing ? 'Reproduciendo…' : 'Nota de voz'}
       </Text>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  listContent: { padding: SIZES.md, gap: 10 },
-  messageWrapper: { marginBottom: 10, maxWidth: '80%' },
+const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  listContent: { padding: SIZES.md, gap: 8 },
+
+  messageWrapper: { marginBottom: 6, maxWidth: '82%' },
   myMessage: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   theirMessage: { alignSelf: 'flex-start', alignItems: 'flex-start' },
-  bubble: { padding: 12, borderRadius: 20, minWidth: 40 },
-  myBubble: { borderBottomRightRadius: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  theirBubble: { borderBottomLeftRadius: 4, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-  messageText: { fontSize: 16, lineHeight: 22 },
-  messageImage: { width: 220, height: 220, borderRadius: 12, marginTop: 5 },
-  audioBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 120 },
-  audioText: { fontSize: 14, fontWeight: '600' },
-  locationBubble: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  locationTextMsg: { fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-  timeText: { fontSize: 10, color: '#999', marginTop: 4 },
-  inputArea: { flexDirection: 'row', alignItems: 'center', padding: 10, borderTopWidth: 1 },
-  iconBtn: { padding: 8 },
-  input: { flex: 1, borderRadius: 22, paddingHorizontal: 15, paddingVertical: 10, marginHorizontal: 5, maxHeight: 100, fontSize: 16 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  micBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
 
-  contextCard: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, gap: 12 },
-  contextImage: { width: 40, height: 40, borderRadius: 8 },
+  bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: SIZES.radius_lg, minWidth: 44 },
+  myBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 },
+  theirBubble: { backgroundColor: colors.card, borderBottomLeftRadius: 6, borderWidth: 1, borderColor: colors.border },
+
+  messageText: { ...type.body },
+  myText: { color: isDark ? '#000' : '#fff' },
+  theirText: { color: colors.text },
+
+  messageImage: { width: 220, height: 220, borderRadius: SIZES.radius, marginTop: 4 },
+
+  locationBubble: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  locationTextMsg: { ...type.bodyMd, textDecorationLine: 'underline' },
+
+  timeText: { ...type.caption, color: colors.textLight, marginTop: 4 },
+
+  inputArea: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    paddingHorizontal: SIZES.md, paddingTop: 8, gap: 6,
+    backgroundColor: colors.headerBg,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  input: {
+    flex: 1, ...type.body, color: colors.text,
+    backgroundColor: colors.inputBackground,
+    borderRadius: SIZES.radius_lg,
+    paddingHorizontal: 16, paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    maxHeight: 110,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  sendBtn: {
+    width: 42, height: 42, borderRadius: 21,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  micBtn: {
+    width: 42, height: 42, borderRadius: 21,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  micBtnRecording: { backgroundColor: colors.reject },
+
+  contextCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: SIZES.md,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  contextImage: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.inputBackground },
   contextInfo: { flex: 1 },
-  contextTitle: { fontSize: 14, fontWeight: 'bold', color: '#111' },
-  contextStatus: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginTop: 4 },
-  contextStatusText: { fontSize: 10, fontWeight: 'bold' },
+  contextTitle: { ...type.h3, color: colors.text },
+  contextStatus: {
+    alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3,
+    borderRadius: SIZES.radius_full, marginTop: 4,
+  },
+  contextStatusText: { ...type.caption },
 });
 
 const getStatusColor = (status: string, primary: string) => {
   switch (status) {
-    case 'rejected': return '#e74c3c';
-    case 'accepted': return '#27ae60';
-    case 'interview': return '#3498db';
+    case 'rejected': return '#FF6B6B';
+    case 'accepted': return '#3DBE7A';
+    case 'interview': return '#5DA8FF';
     default: return primary;
   }
 };
