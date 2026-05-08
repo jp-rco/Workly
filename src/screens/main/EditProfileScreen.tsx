@@ -127,6 +127,13 @@ export default function EditProfileScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 120 : 20}
     >
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Editar Perfil</Text>
+      </View>
+
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <FadeInUp style={styles.photoSection}>
           <TouchableOpacity onPress={handlePickPhoto} disabled={uploadingPhoto} style={styles.avatarContainer} activeOpacity={0.85}>
@@ -273,6 +280,16 @@ function Field({ label, value, onChangeText, placeholder, multiline, numberOfLin
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: SIZES.sm,
+    backgroundColor: colors.headerBg,
+  },
+  backBtn: { marginRight: 16 },
+  headerTitle: { ...type.h2, color: colors.text },
   content: { padding: SIZES.lg, paddingBottom: SIZES.xxl },
 
   photoSection: { alignItems: 'center', marginBottom: SIZES.lg, paddingTop: SIZES.md },

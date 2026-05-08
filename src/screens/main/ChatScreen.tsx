@@ -206,6 +206,16 @@ export default function ChatScreen({ route, navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={headerHeight}
     >
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{routeJobTitle || appData?.jobTitle || 'Chat'}</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>Con {appData?.jobTitle || 'Usuario'}</Text>
+        </View>
+      </View>
+
       {appData && (
         <TouchableOpacity
           style={styles.contextCard}
@@ -307,6 +317,20 @@ function VoiceMessagePlayer({ uri, isMine, colors, isDark }: { uri: string; isMi
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.lg,
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingBottom: SIZES.sm,
+    backgroundColor: colors.headerBg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backBtn: { marginRight: 16 },
+  headerInfo: { flex: 1 },
+  headerTitle: { ...type.h3, color: colors.text },
+  headerSubtitle: { ...type.caption, color: colors.textLight },
   listContent: { padding: SIZES.md, gap: 8 },
 
   messageWrapper: { marginBottom: 6, maxWidth: '82%' },

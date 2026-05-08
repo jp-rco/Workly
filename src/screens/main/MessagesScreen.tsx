@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Platform,
 } from 'react-native';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -200,7 +200,9 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: {
-    paddingHorizontal: SIZES.lg, paddingTop: SIZES.md, paddingBottom: SIZES.sm,
+    paddingHorizontal: SIZES.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: SIZES.sm,
     backgroundColor: colors.headerBg,
   },
   headerTitle: { ...type.display, color: colors.text },

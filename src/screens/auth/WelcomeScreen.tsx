@@ -68,12 +68,6 @@ export default function WelcomeScreen({ navigation }: Props) {
 
       <View style={styles.content}>
         <View style={styles.logoContainer}>
-          <FadeInUp delay={120}>
-            <View style={styles.badge}>
-              <View style={styles.badgeDot} />
-              <Text style={styles.badgeText}>Premium · v2</Text>
-            </View>
-          </FadeInUp>
 
           <FadeInUp delay={220}>
             <Text style={styles.logoText}>Workly</Text>

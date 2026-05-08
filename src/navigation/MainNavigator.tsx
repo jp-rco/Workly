@@ -17,6 +17,7 @@ import ChatScreen from '../screens/main/ChatScreen';
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { CustomTabBar } from '../components/common/CustomTabBar';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -44,7 +45,7 @@ function TabNavigator() {
 
   useEffect(() => {
     if (!userProfile?.uid) return;
-    
+
     // Unread Messages Listener
     const qMsg = query(
       collection(db, 'conversations'),
@@ -68,68 +69,34 @@ function TabNavigator() {
       setUnreadStatusCount(snapshot.size);
     });
 
-    return () => { if(unsubMsg) unsubMsg(); if(unsubApp) unsubApp(); };
+    return () => { if (unsubMsg) unsubMsg(); if (unsubApp) unsubApp(); };
   }, [userProfile?.uid]);
 
   return (
     <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={({ route }) => ({
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: colors.headerBg,
-          elevation: 0,
-          shadowOpacity: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-        },
-        headerTitleStyle: {
-          color: colors.text,
-          fontWeight: '600',
-        },
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Messages') {
-            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-          } else if (route.name === 'Matches') {
-            iconName = focused ? 'file-tray-full' : 'file-tray-full-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          } else if (route.name === 'CreateJob') {
-            iconName = focused ? 'add-circle' : 'add-circle-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
+        headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textLight,
-        tabBarStyle: {
-          backgroundColor: colors.tabBar,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          elevation: 0,
-          paddingBottom: 5,
-        },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Explorar' }} />
-      <Tab.Screen 
-        name="Messages" 
-        component={MessagesScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{
           title: totalUnread > 0 ? `Mensajes (${totalUnread})` : 'Mensajes',
           tabBarBadge: totalUnread > 0 ? totalUnread : undefined
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="Matches" 
-        component={MatchesScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Matches"
+        component={MatchesScreen}
+        options={{
           title: unreadStatusCount > 0 ? `Postulaciones (${unreadStatusCount})` : 'Postulaciones',
-          tabBarBadge: unreadStatusCount > 0 ? unreadStatusCount : undefined 
-        }} 
+          tabBarBadge: unreadStatusCount > 0 ? unreadStatusCount : undefined
+        }}
       />
 
       {userProfile?.userType === 'Hiring' && (
@@ -151,7 +118,7 @@ export default function MainNavigator() {
         name="EditProfile"
         component={EditProfileScreen}
         options={{
-          headerShown: true,
+          headerShown: false,
           title: 'Editar Perfil',
           headerTintColor: colors.primary,
           headerStyle: { backgroundColor: colors.headerBg },
@@ -162,7 +129,7 @@ export default function MainNavigator() {
         name="Detail"
         component={DetailScreen}
         options={{
-          headerShown: true,
+          headerShown: false,
           title: 'Detalles',
           headerTintColor: colors.primary,
           headerStyle: { backgroundColor: colors.headerBg },
@@ -173,7 +140,7 @@ export default function MainNavigator() {
         name="Chat"
         component={ChatScreen}
         options={{
-          headerShown: true,
+          headerShown: false,
           headerTintColor: colors.primary,
           headerStyle: { backgroundColor: colors.headerBg },
           headerTitleStyle: { color: colors.text },

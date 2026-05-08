@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Image, TouchableOpacity,
-  ActivityIndicator, RefreshControl, ScrollView,
+  ActivityIndicator, RefreshControl, ScrollView, Platform,
 } from 'react-native';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -410,7 +410,9 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 
   headerBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SIZES.lg, paddingTop: SIZES.md, paddingBottom: SIZES.sm,
+    paddingHorizontal: SIZES.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: SIZES.sm,
     backgroundColor: colors.headerBg,
   },
   backBtn: { marginRight: 12 },

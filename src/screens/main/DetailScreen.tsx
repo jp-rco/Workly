@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  ActivityIndicator, Dimensions, TouchableOpacity, Linking, Alert, Modal, TextInput,
+  ActivityIndicator, Dimensions, TouchableOpacity, Linking, Alert, Modal, TextInput, Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../../navigation/MainNavigator';
@@ -148,6 +148,15 @@ export default function DetailScreen({ route, navigation }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 140 }}>
+        {/* Floating Back Button */}
+        <TouchableOpacity 
+          style={styles.floatingBackBtn} 
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={24} color={isDark ? '#FFF' : '#000'} />
+        </TouchableOpacity>
+
         {kind === 'Job' ? (
           <JobDetail data={data} colors={colors} isDark={isDark} />
         ) : (
@@ -442,6 +451,21 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   noData: { ...type.body, color: colors.textLight },
+
+  floatingBackBtn: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
 
   heroWrap: { position: 'relative' },
   heroImage: { width, height: 260, resizeMode: 'cover', backgroundColor: colors.inputBackground },

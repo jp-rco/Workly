@@ -143,7 +143,7 @@ export default function RegisterScreen({ navigation }: Props) {
               <TypeCard
                 type="Hiring"
                 icon="briefcase"
-                title="Contrato"
+                title="Contratar"
                 description="Encuentra el talento ideal"
               />
             </View>

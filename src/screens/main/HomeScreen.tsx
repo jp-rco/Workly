@@ -266,6 +266,13 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={s.container}>
+      <View style={s.header}>
+        <Text style={s.headerTitle}>Workly</Text>
+        <TouchableOpacity style={s.headerIcon}>
+          <Ionicons name="notifications-outline" size={22} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
       {cards.length > 0 ? (
         <View style={s.swiperContainer}>
           <Swiper
@@ -339,6 +346,17 @@ export default function HomeScreen({ navigation }: Props) {
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SIZES.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: SIZES.sm,
+    backgroundColor: colors.headerBg,
+  },
+  headerTitle: { ...type.h1, color: colors.text, letterSpacing: -0.5 },
+  headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   swiperContainer: { flex: 1 },
 

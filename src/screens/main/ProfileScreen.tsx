@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
-  ActivityIndicator, Alert, Linking, LayoutAnimation,
+  ActivityIndicator, Alert, Linking, LayoutAnimation, Platform,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -244,6 +244,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   topControls: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: SIZES.md,
+    paddingTop: Platform.OS === 'ios' ? 40 : 20,
   },
   iconBtn: {
     width: 40, height: 40, borderRadius: 20,
