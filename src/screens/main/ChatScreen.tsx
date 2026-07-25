@@ -188,7 +188,7 @@ export default function ChatScreen({ route, navigation }: Props) {
                 Linking.openURL(url);
               }}
             >
-              <Ionicons name="location" size={20} color={isMine ? (isDark ? '#000' : '#fff') : colors.primary} />
+              <Ionicons name="location" size={20} color={isMine ? colors.onPrimary : colors.primary} />
               <Text style={[styles.locationTextMsg, isMine ? styles.myText : styles.theirText]}>Ver ubicación</Text>
             </TouchableOpacity>
           )}
@@ -268,7 +268,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
         {inputText.trim() ? (
           <PressScale style={styles.sendBtn} onPress={handleSendText}>
-            <Ionicons name="arrow-up" size={20} color={isDark ? '#000' : '#fff'} />
+            <Ionicons name="arrow-up" size={20} color={colors.onPrimary} />
           </PressScale>
         ) : (
           <TouchableOpacity
@@ -280,7 +280,7 @@ export default function ChatScreen({ route, navigation }: Props) {
             {isRecording ? (
               <Pulse color="#fff" size={12} />
             ) : (
-              <Ionicons name="mic" size={20} color={isDark ? '#000' : '#fff'} />
+              <Ionicons name="mic" size={20} color={colors.onPrimary} />
             )}
           </TouchableOpacity>
         )}
@@ -302,8 +302,8 @@ function VoiceMessagePlayer({ uri, isMine, colors, isDark }: { uri: string; isMi
     player.play();
   };
 
-  const fg = isMine ? (isDark ? '#000' : '#fff') : colors.primary;
-  const tx = isMine ? (isDark ? '#000' : '#fff') : colors.text;
+  const fg = isMine ? colors.onPrimary : colors.primary;
+  const tx = isMine ? colors.onPrimary : colors.text;
 
   return (
     <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 140 }} onPress={handlePlay}>
@@ -342,7 +342,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   theirBubble: { backgroundColor: colors.card, borderBottomLeftRadius: 6, borderWidth: 1, borderColor: colors.border },
 
   messageText: { ...type.body },
-  myText: { color: isDark ? '#000' : '#fff' },
+  myText: { color: colors.onPrimary },
   theirText: { color: colors.text },
 
   messageImage: { width: 220, height: 220, borderRadius: SIZES.radius, marginTop: 4 },

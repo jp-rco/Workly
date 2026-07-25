@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebase/config';
@@ -57,7 +58,8 @@ export default function LoginScreen({ navigation }: Props) {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 20}
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -67,7 +69,11 @@ export default function LoginScreen({ navigation }: Props) {
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
 
-        <View style={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <FadeInUp delay={80}>
             <Text style={styles.eyebrow}>BIENVENIDO</Text>
           </FadeInUp>
@@ -149,11 +155,11 @@ export default function LoginScreen({ navigation }: Props) {
                 disabled={loading}
               >
                 {loading ? (
-                  <ActivityIndicator color="#000" />
+                  <ActivityIndicator color={colors.onPrimary} />
                 ) : (
                   <>
                     <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginLeft: 6 }} />
+                    <Ionicons name="arrow-forward" size={18} color={colors.onPrimary} style={{ marginLeft: 6 }} />
                   </>
                 )}
               </PressScale>
@@ -168,7 +174,7 @@ export default function LoginScreen({ navigation }: Props) {
               </TouchableOpacity>
             </View>
           </FadeInUp>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -191,10 +197,10 @@ const makeStyles = (colors: any, isDark: boolean) =>
       marginLeft: SIZES.lg,
       marginTop: SIZES.sm,
     },
-    content: {
-      flex: 1,
+    scrollContent: {
       paddingHorizontal: SIZES.lg,
       paddingTop: SIZES.lg,
+      paddingBottom: 130,
     },
     eyebrow: {
       fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -279,7 +285,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       elevation: 6,
     },
     loginButtonText: {
-      color: '#000000',
+      color: colors.onPrimary,
       fontFamily: 'PlusJakartaSans_700Bold',
       fontSize: 16,
       letterSpacing: 0.2,

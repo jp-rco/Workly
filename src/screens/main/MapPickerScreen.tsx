@@ -142,7 +142,7 @@ export default function MapPickerScreen({
           />
         </View>
         <PressScale style={styles.searchBtn} onPress={handleSearch}>
-          <Ionicons name="arrow-forward" size={20} color={isDark ? '#000' : '#fff'} />
+          <Ionicons name="arrow-forward" size={20} color={colors.onPrimary} />
         </PressScale>
       </View>
 
@@ -183,7 +183,7 @@ export default function MapPickerScreen({
             onPress={handleConfirm}
             disabled={!address || resolving}
           >
-            <Ionicons name="checkmark" size={18} color={isDark ? '#000' : '#fff'} />
+            <Ionicons name="checkmark" size={18} color={colors.onPrimary} />
             <Text style={styles.confirmText}>Confirmar ubicación</Text>
           </PressScale>
         </View>
@@ -247,5 +247,5 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
   },
   disabledBtn: { opacity: 0.4 },
-  confirmText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  confirmText: { ...type.button, color: colors.onPrimary },
 });

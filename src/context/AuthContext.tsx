@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from '../firebase/config';
 
 export type UserType = 'Searching' | 'Hiring';
@@ -34,7 +35,14 @@ export interface UserProfile {
   location?: string;
   website?: string;
   companySize?: string;
-  createdAt?: number;
+  createdAt?: number | string;
+  onboardingPending?: boolean;
+  isDualProfile?: boolean;
+}
+
+interface SwitchRoleResult {
+  isFirstTime: boolean;
+  targetRole: UserType;
 }
 
 interface AuthContextData {
@@ -43,7 +51,7 @@ interface AuthContextData {
   loading: boolean;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  switchRole: () => Promise<void>;
+  switchRole: () => Promise<SwitchRoleResult>;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -55,12 +63,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (uid: string) => {
     try {
-      const docRef = doc(db, 'users', uid);
+      const activeId = await AsyncStorage.getItem(`@workly_active_profile_id_${uid}`);
+      const targetDocId = activeId || uid;
+
+      const docRef = doc(db, 'users', targetDocId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        setUserProfile(docSnap.data() as UserProfile);
+        setUserProfile({ uid: docSnap.id, ...docSnap.data() } as UserProfile);
       } else {
-        setUserProfile(null);
+        const defaultRef = doc(db, 'users', uid);
+        const defaultSnap = await getDoc(defaultRef);
+        if (defaultSnap.exists()) {
+          setUserProfile({ uid: defaultSnap.id, ...defaultSnap.data() } as UserProfile);
+        } else {
+          setUserProfile(null);
+        }
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -73,13 +90,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchRole = async () => {
-    if (!user || !userProfile) return;
-    const newRole: UserType = userProfile.userType === 'Searching' ? 'Hiring' : 'Searching';
+  const switchRole = async (): Promise<SwitchRoleResult> => {
+    if (!user || !userProfile) {
+      return { isFirstTime: false, targetRole: 'Searching' };
+    }
+
+    const currentRole = userProfile.userType;
+    const targetRole: UserType = currentRole === 'Searching' ? 'Hiring' : 'Searching';
+    const email = userProfile.email || user.email;
+
     try {
-      const docRef = doc(db, 'users', user.uid);
-      await updateDoc(docRef, { userType: newRole });
-      await fetchProfile(user.uid);
+      // Buscar si ya existe un perfil en Firestore con el mismo correo y el rol destino
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email), where('userType', '==', targetRole));
+      const snap = await getDocs(q);
+
+      let targetProfileDocId = '';
+      let isFirstTime = false;
+
+      if (!snap.empty) {
+        // Ya existe un perfil previamente creado para este rol con el mismo correo
+        const existingDoc = snap.docs[0];
+        targetProfileDocId = existingDoc.id;
+        const targetData = { uid: existingDoc.id, ...existingDoc.data() } as UserProfile;
+        setUserProfile(targetData);
+      } else {
+        // NO existe -> Crear un perfil secundario independiente con el mismo correo y nombre
+        isFirstTime = true;
+        targetProfileDocId = `${user.uid}_${targetRole}`;
+        const newProfileData: any = {
+          uid: targetProfileDocId,
+          authUid: user.uid,
+          email: email,
+          name: userProfile.name || 'Usuario',
+          userType: targetRole,
+          createdAt: new Date().toISOString(),
+          isDualProfile: true,
+          photoURL: userProfile.photoURL || '',
+        };
+
+        if (targetRole === 'Hiring') {
+          // Si no tiene empresa definida, se establece su nombre
+          newProfileData.companyName = userProfile.companyName || userProfile.name || 'Empresa';
+          newProfileData.location = userProfile.city || '';
+          newProfileData.companyDescription = userProfile.bio || '';
+        } else {
+          newProfileData.profession = '';
+          newProfileData.city = userProfile.location || '';
+          newProfileData.bio = userProfile.companyDescription || '';
+        }
+
+        await setDoc(doc(db, 'users', targetProfileDocId), newProfileData);
+        setUserProfile({ uid: targetProfileDocId, ...newProfileData } as UserProfile);
+      }
+
+      // Guardar perfil activo en AsyncStorage para persisitir la navegación en dicho rol
+      await AsyncStorage.setItem(`@workly_active_profile_id_${user.uid}`, targetProfileDocId);
+
+      return { isFirstTime, targetRole };
     } catch (error) {
       console.error('Error switching role:', error);
       throw error;
@@ -102,6 +170,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      if (user?.uid) {
+        await AsyncStorage.removeItem(`@workly_active_profile_id_${user.uid}`);
+      }
       await signOut(auth);
     } catch (error) {
       console.error('Error signing out: ', error);

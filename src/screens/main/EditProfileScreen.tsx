@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
   TouchableOpacity, Alert, ActivityIndicator, Image, Linking,
@@ -43,6 +43,19 @@ export default function EditProfileScreen({ navigation }: Props) {
 
   const isSearching = userProfile?.userType === 'Searching';
   const styles = makeStyles(colors, isDark);
+
+  useEffect(() => {
+    if (userProfile) {
+      setName(userProfile.userType === 'Searching' ? (userProfile.name || '') : (userProfile.companyName || userProfile.name || ''));
+      setBio(userProfile.userType === 'Searching' ? (userProfile.bio || '') : (userProfile.companyDescription || ''));
+      setCity(userProfile.userType === 'Searching' ? (userProfile.city || '') : (userProfile.location || ''));
+      setRole(userProfile.userType === 'Searching' ? (userProfile.profession || '') : (userProfile.industry || ''));
+      setJobDescription(userProfile.jobDescription || '');
+      setSkillsText(userProfile.skills?.join(', ') || '');
+      setPhotoURL(userProfile.photoURL || '');
+      setResumeURL(userProfile.resumeURL || '');
+    }
+  }, [userProfile]);
 
   const handlePickPhoto = async () => {
     if (!userProfile) return;
@@ -108,8 +121,8 @@ export default function EditProfileScreen({ navigation }: Props) {
       const docRef = doc(db, 'users', userProfile.uid);
       const skills = skillsText.split(',').map(s => s.trim()).filter(Boolean);
       const updateData = userProfile.userType === 'Searching'
-        ? { name, bio, city, profession: role, jobDescription, skills }
-        : { name, companyDescription: bio, location: city, industry: role };
+        ? { name, bio, city, profession: role, jobDescription, skills, photoURL, resumeURL }
+        : { companyName: name || userProfile.name, name: userProfile.name || name, companyDescription: bio, location: city, industry: role, photoURL };
       await updateDoc(docRef, updateData);
       await refreshProfile();
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -146,8 +159,8 @@ export default function EditProfileScreen({ navigation }: Props) {
             )}
             <View style={styles.cameraOverlay}>
               {uploadingPhoto
-                ? <ActivityIndicator color={isDark ? '#000' : '#fff'} size="small" />
-                : <Ionicons name="camera" size={16} color={isDark ? '#000' : '#fff'} />}
+                ? <ActivityIndicator color={colors.onPrimary} size="small" />
+                : <Ionicons name="camera" size={16} color={colors.onPrimary} />}
             </View>
           </TouchableOpacity>
           {uploadingPhoto && (
@@ -157,7 +170,14 @@ export default function EditProfileScreen({ navigation }: Props) {
         </FadeInUp>
 
         <FadeInUp delay={80}>
-          <Field label={isSearching ? 'Nombre completo' : 'Nombre de la empresa'} value={name} onChangeText={setName} colors={colors} isDark={isDark} />
+          <Field
+            label={isSearching ? 'Nombre completo' : 'Nombre de la empresa (o tu nombre)'}
+            placeholder={isSearching ? 'Ej: Juan Pérez' : 'Ej: Mi Empresa Inc. o tu nombre'}
+            value={name}
+            onChangeText={setName}
+            colors={colors}
+            isDark={isDark}
+          />
           <Field label={isSearching ? 'Profesión / cargo' : 'Sector / industria'} value={role} onChangeText={setRole} colors={colors} isDark={isDark} />
           <Field label={isSearching ? 'Ciudad' : 'Ubicación'} value={city} onChangeText={setCity} colors={colors} isDark={isDark} />
 
@@ -251,7 +271,7 @@ export default function EditProfileScreen({ navigation }: Props) {
 
           <PressScale style={styles.saveButton} onPress={handleSave} disabled={loading}>
             {loading
-              ? <ActivityIndicator color={isDark ? '#000' : '#fff'} />
+              ? <ActivityIndicator color={colors.onPrimary} />
               : <Text style={styles.saveButtonText}>Guardar cambios</Text>}
           </PressScale>
         </FadeInUp>
@@ -290,7 +310,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   backBtn: { marginRight: 16 },
   headerTitle: { ...type.h2, color: colors.text },
-  content: { padding: SIZES.lg, paddingBottom: SIZES.xxl },
+  content: { padding: SIZES.lg, paddingBottom: 140 },
 
   photoSection: { alignItems: 'center', marginBottom: SIZES.lg, paddingTop: SIZES.md },
   avatarContainer: { position: 'relative' },
@@ -367,5 +387,5 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginTop: SIZES.xl,
   },
-  saveButtonText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  saveButtonText: { ...type.button, color: colors.onPrimary },
 });

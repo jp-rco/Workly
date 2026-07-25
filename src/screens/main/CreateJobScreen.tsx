@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { SIZES, SHADOWS, type } from '../../constants/theme';
+import { SIZES, SHADOWS, type, FONTS } from '../../constants/theme';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../../navigation/MainNavigator';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,8 +16,19 @@ import { pickAndUploadImage } from '../../utils/uploadImage';
 import MapPickerScreen, { PickedLocation } from './MapPickerScreen';
 import MapView, { Marker } from '../../components/common/AppMap';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { formatSalaryNumber } from '../../utils/formatters';
 
 type Props = { navigation: BottomTabNavigationProp<MainTabParamList, 'CreateJob'>; };
+
+const FREQUENCY_OPTIONS = [
+  'Por trabajo',
+  'Por hora',
+  'Diario',
+  'Semanal',
+  'Quincenal',
+  'Mensual',
+  'Otro',
+];
 
 export default function CreateJobScreen({ navigation }: Props) {
   const { userProfile } = useAuth();
@@ -31,7 +42,13 @@ export default function CreateJobScreen({ navigation }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('');
-  const [pay, setPay] = useState('');
+  
+  // NUEVOS ESTADOS DE SALARIO ALINEADOS HORIZONTALMENTE
+  const [payAmount, setPayAmount] = useState('');
+  const [payFrequency, setPayFrequency] = useState('Por trabajo');
+  const [customFrequency, setCustomFrequency] = useState('');
+  const [showFrequencyModal, setShowFrequencyModal] = useState(false);
+
   const [requirementsText, setRequirementsText] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [location, setLocation] = useState<PickedLocation | null>(null);
@@ -53,7 +70,11 @@ export default function CreateJobScreen({ navigation }: Props) {
   };
 
   const handlePostJob = async () => {
-    if (!title.trim() || !description.trim() || !duration.trim() || !pay.trim()) {
+    // Calcular la cadena combinada de salario y periodo
+    const frequencyLabel = payFrequency === 'Otro' ? (customFrequency.trim() || 'Otro') : payFrequency;
+    const finalPay = payAmount.trim() ? `${payAmount.trim()} / ${frequencyLabel}` : frequencyLabel;
+
+    if (!title.trim() || !description.trim() || !duration.trim() || !finalPay.trim()) {
       Alert.alert('Faltan datos', 'Completa: título, descripción, duración y salario.');
       return;
     }
@@ -68,7 +89,7 @@ export default function CreateJobScreen({ navigation }: Props) {
         ownerUid: userProfile?.uid,
         companyName: userProfile?.name || userProfile?.companyName || '',
         title: title.trim(), description: description.trim(),
-        duration: duration.trim(), pay: pay.trim(),
+        duration: duration.trim(), pay: finalPay.trim(),
         requirements, imageUrl,
         latitude: location.latitude, longitude: location.longitude,
         address: location.address,
@@ -86,7 +107,8 @@ export default function CreateJobScreen({ navigation }: Props) {
 
   const resetForm = () => {
     setTitle(''); setDescription(''); setDuration('');
-    setPay(''); setRequirementsText(''); setImageUrl(''); setLocation(null);
+    setPayAmount(''); setPayFrequency('Por trabajo'); setCustomFrequency('');
+    setRequirementsText(''); setImageUrl(''); setLocation(null);
   };
 
   if (showMapPicker) {
@@ -106,7 +128,7 @@ export default function CreateJobScreen({ navigation }: Props) {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <FadeInUp>
@@ -151,7 +173,7 @@ export default function CreateJobScreen({ navigation }: Props) {
                   <Ionicons
                     name={t === 'formal' ? 'briefcase' : 'construct'}
                     size={16}
-                    color={active ? (isDark ? '#000' : '#fff') : colors.textLight}
+                    color={active ? colors.onPrimary : colors.textLight}
                   />
                   <Text style={[styles.tabText, active && styles.activeTabText]}>
                     {t === 'formal' ? 'Formal' : 'Informal'}
@@ -184,13 +206,48 @@ export default function CreateJobScreen({ navigation }: Props) {
             placeholder="Ej: 8 horas diarias, Lun–Vie"
             colors={colors} isDark={isDark}
           />
-          <Field
-            label="Salario / paga"
-            value={pay}
-            onChangeText={setPay}
-            placeholder="Ej: 5.000.000"
-            colors={colors} isDark={isDark}
-          />
+
+          {/* SECCIÓN DE SALARIO Y PERIODO ALINEADOS HORIZONTALMENTE */}
+          <Text style={styles.label}>Salario / paga y periodo</Text>
+          <View style={styles.payRowContainer}>
+            {/* Recuadro 1: Valor en Números */}
+            <View style={styles.payAmountBox}>
+              <Text style={styles.currencyPrefix}>$</Text>
+              <TextInput
+                style={styles.payAmountInput}
+                placeholder="Ej: 50.000"
+                placeholderTextColor={colors.textLight}
+                value={payAmount}
+                onChangeText={(t: string) => setPayAmount(formatSalaryNumber(t))}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Recuadro 2: Combo Box / Selector de Frecuencia */}
+            <TouchableOpacity
+              style={styles.payFrequencyBox}
+              onPress={() => setShowFrequencyModal(true)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.payFrequencyText} numberOfLines={1}>
+                {payFrequency === 'Otro' ? (customFrequency || 'Otro...') : payFrequency}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Campo de texto libre cuando selecciona 'Otro' */}
+          {payFrequency === 'Otro' && (
+            <FadeInUp style={{ marginTop: 8 }}>
+              <TextInput
+                style={styles.input}
+                placeholder="Escribe el periodo o condición (ej: Por comisión)"
+                placeholderTextColor={colors.textLight}
+                value={customFrequency}
+                onChangeText={setCustomFrequency}
+              />
+            </FadeInUp>
+          )}
 
           <Text style={styles.label}>Requisitos (separados por coma)</Text>
           <TextInput
@@ -241,22 +298,55 @@ export default function CreateJobScreen({ navigation }: Props) {
 
           <PressScale style={styles.submitButton} onPress={handlePostJob} disabled={loading}>
             {loading ? (
-              <ActivityIndicator color={isDark ? '#000' : '#fff'} />
+              <ActivityIndicator color={colors.onPrimary} />
             ) : (
               <>
-                <Ionicons name="rocket-outline" size={18} color={isDark ? '#000' : '#fff'} />
+                <Ionicons name="rocket-outline" size={18} color={colors.onPrimary} />
                 <Text style={styles.submitButtonText}>Publicar trabajo</Text>
               </>
             )}
           </PressScale>
         </FadeInUp>
       </ScrollView>
+
+      {/* MODAL / COMBO BOX DE OPCIONES DE PERIODO DE PAGO */}
+      <Modal visible={showFrequencyModal} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFrequencyModal(false)}
+        >
+          <View style={styles.frequencyModalCard}>
+            <Text style={styles.frequencyModalTitle}>Periodo de pago</Text>
+            {FREQUENCY_OPTIONS.map((opt) => {
+              const selected = payFrequency === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[styles.frequencyOption, selected && styles.frequencyOptionSelected]}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setPayFrequency(opt);
+                    setShowFrequencyModal(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.frequencyOptionText, selected && styles.frequencyOptionTextSelected]}>
+                    {opt}
+                  </Text>
+                  {selected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 function Field({
-  label, value, onChangeText, placeholder, multiline, numberOfLines, colors, isDark,
+  label, value, onChangeText, placeholder, multiline, numberOfLines, keyboardType, colors, isDark,
 }: any) {
   const styles = makeStyles(colors, isDark);
   return (
@@ -270,6 +360,7 @@ function Field({
         onChangeText={onChangeText}
         multiline={multiline}
         numberOfLines={numberOfLines}
+        keyboardType={keyboardType}
       />
     </>
   );
@@ -277,7 +368,7 @@ function Field({
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: SIZES.lg, paddingBottom: SIZES.xxl },
+  content: { padding: SIZES.lg, paddingBottom: 140 },
 
   eyebrow: { ...type.overline, color: colors.primary, marginBottom: 6 },
   pageTitle: { ...type.display, color: colors.text },
@@ -299,7 +390,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   activeTab: { backgroundColor: colors.primary, borderColor: colors.primary },
   tabText: { ...type.button, color: colors.textLight },
-  activeTabText: { color: isDark ? '#000' : '#fff' },
+  activeTabText: { color: colors.onPrimary },
 
   label: { ...type.small, color: colors.text, marginBottom: 8, marginTop: SIZES.md },
 
@@ -310,6 +401,94 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   textArea: { height: 120, textAlignVertical: 'top' },
+
+  // ESTILOS DE SALARIO Y PERIODO ALINEADOS HORIZONTALMENTE
+  payRowContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  payAmountBox: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.inputBackground,
+    paddingHorizontal: SIZES.md,
+    height: 50,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  currencyPrefix: {
+    ...type.body,
+    color: colors.primary,
+    fontFamily: FONTS.bold,
+    marginRight: 4,
+  },
+  payAmountInput: {
+    flex: 1,
+    color: colors.text,
+    fontFamily: FONTS.medium,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  payFrequencyBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.inputBackground,
+    paddingHorizontal: SIZES.md,
+    height: 50,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  payFrequencyText: {
+    flex: 1,
+    ...type.body,
+    color: colors.text,
+    fontFamily: FONTS.semibold,
+    marginRight: 4,
+  },
+
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center', padding: 20,
+  },
+  frequencyModalCard: {
+    backgroundColor: colors.card,
+    width: '85%',
+    borderRadius: SIZES.radius_xl,
+    padding: SIZES.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  frequencyModalTitle: {
+    ...type.h2,
+    color: colors.text,
+    marginBottom: 8,
+  },
+  frequencyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: SIZES.radius,
+  },
+  frequencyOptionSelected: {
+    backgroundColor: isDark ? 'rgba(232,197,108,0.10)' : 'rgba(10,10,10,0.06)',
+  },
+  frequencyOptionText: {
+    ...type.body,
+    color: colors.text,
+  },
+  frequencyOptionTextSelected: {
+    color: colors.primary,
+    fontFamily: FONTS.bold,
+  },
 
   imagePickerArea: {
     height: 180, borderRadius: SIZES.radius_lg, overflow: 'hidden',
@@ -369,5 +548,5 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginTop: SIZES.xl,
   },
-  submitButtonText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  submitButtonText: { ...type.button, color: colors.onPrimary },
 });

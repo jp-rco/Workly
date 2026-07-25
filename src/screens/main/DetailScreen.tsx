@@ -7,19 +7,20 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../../navigation/MainNavigator';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { SIZES, SHADOWS, type } from '../../constants/theme';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { SIZES, SHADOWS, FONTS, type } from '../../constants/theme';
+import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from '../../components/common/AppMap';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { formatSalaryNumber } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Detail'>;
 const { width } = Dimensions.get('window');
 
 export default function DetailScreen({ route, navigation }: Props) {
-  const { id, type: kind, applicationId } = route.params;
+  const { id, type: kind, applicationId, fromMatches } = route.params as any;
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
 
@@ -93,6 +94,46 @@ export default function DetailScreen({ route, navigation }: Props) {
     }
   };
 
+  const handleRejectCandidateFromHome = async () => {
+    if (!userProfile || !id) return;
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'swipes'), {
+        userId: userProfile.uid,
+        targetId: id,
+        type: 'nope',
+        timestamp: new Date().toISOString(),
+      });
+      Alert.alert('Descartado', 'El candidato ha sido descartado de tus búsquedas.');
+      navigation.goBack();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'No se pudo descartar el candidato');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLikeCandidateFromHome = async () => {
+    if (!userProfile || !id) return;
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'likes'), {
+        employerId: userProfile.uid,
+        userId: id,
+        type: 'EmployerLikesUser',
+        timestamp: new Date().toISOString(),
+      });
+      Alert.alert('¡Me interesa!', 'Se ha guardado tu interés en este candidato.');
+      navigation.goBack();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'No se pudo guardar el interés');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCompleteJob = async () => {
     if (!completionValue) {
       Alert.alert('Error', 'Por favor ingresa el valor solicitado');
@@ -147,7 +188,7 @@ export default function DetailScreen({ route, navigation }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 140 }}>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 150 }}>
         {/* Floating Back Button */}
         <TouchableOpacity 
           style={styles.floatingBackBtn} 
@@ -181,48 +222,116 @@ export default function DetailScreen({ route, navigation }: Props) {
       </ScrollView>
 
       {/* Recruiter Actions Overlay */}
-      {userProfile?.userType === 'Hiring' && appData && appData.status !== 'completed' && (
+      {userProfile?.userType === 'Hiring' && !fromMatches && (
         <View style={styles.actionFooter}>
-          {appData.status === 'pending' && (
+          {!appData ? (
             <View style={styles.btnRow}>
-              <TouchableOpacity style={[styles.actionBtn, styles.btnReject]} onPress={() => handleUpdateStatus('rejected')} activeOpacity={0.85}>
-                <Text style={styles.btnTextLight}>Rechazar</Text>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnReject]}
+                onPress={handleRejectCandidateFromHome}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="close-circle-outline" size={18} color={colors.reject} style={{ marginRight: 4 }} />
+                <Text style={styles.btnTextLight} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                  Descartar
+                </Text>
               </TouchableOpacity>
-              {isInformal ? (
-                <PressScale style={[styles.actionBtn, styles.btnHire]} onPress={() => handleUpdateStatus('accepted')}>
-                  <Text style={styles.btnText}>Contratar ya</Text>
-                </PressScale>
-              ) : (
-                <PressScale style={[styles.actionBtn, styles.btnAccept]} onPress={() => setShowDatePicker(true)}>
-                  <Text style={styles.btnText}>Programar entrevista</Text>
-                </PressScale>
-              )}
-            </View>
-          )}
 
-          {appData.status === 'interview' && (
-            <View style={styles.btnRow}>
-              <TouchableOpacity style={[styles.actionBtn, styles.btnReject]} onPress={() => handleUpdateStatus('rejected')} activeOpacity={0.85}>
-                <Text style={styles.btnTextLight}>Rechazar</Text>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnHire]}
+                onPress={handleLikeCandidateFromHome}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.onPrimary} style={{ marginRight: 4 }} />
+                <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                  Me interesa
+                </Text>
               </TouchableOpacity>
-              <PressScale style={[styles.actionBtn, styles.btnHire]} onPress={() => handleUpdateStatus('accepted')}>
-                <Text style={styles.btnText}>Contratar</Text>
-              </PressScale>
             </View>
-          )}
+          ) : (
+            appData.status !== 'completed' && (
+              <>
+                {appData.status === 'pending' && (
+                  <View style={styles.btnRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.btnReject]}
+                      onPress={() => handleUpdateStatus('rejected')}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.btnTextLight} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        Rechazar
+                      </Text>
+                    </TouchableOpacity>
 
-          {appData.status === 'accepted' && (
-            <PressScale style={[styles.actionBtn, styles.btnComplete]} onPress={() => setShowCompleteModal(true)}>
-              <Ionicons name="trophy-outline" size={18} color={isDark ? '#000' : '#fff'} />
-              <Text style={styles.btnText}>Trabajo realizado</Text>
-            </PressScale>
-          )}
+                    {isInformal ? (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.btnHire]}
+                        onPress={() => handleUpdateStatus('accepted')}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                          Contratar ya
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.btnAccept]}
+                        onPress={() => setShowDatePicker(true)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                          Programar entrevista
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
 
-          {appData.status === 'rejected' && (
-            <View style={styles.statusBanner}>
-              <Ionicons name="close-circle" size={20} color="#fff" />
-              <Text style={styles.bannerText}>Postulación rechazada</Text>
-            </View>
+                {appData.status === 'interview' && (
+                  <View style={styles.btnRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.btnReject]}
+                      onPress={() => handleUpdateStatus('rejected')}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.btnTextLight} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        Rechazar
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.btnHire]}
+                      onPress={() => handleUpdateStatus('accepted')}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                        Contratar
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {appData.status === 'accepted' && (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.btnComplete]}
+                    onPress={() => setShowCompleteModal(true)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="trophy-outline" size={18} color={colors.onPrimary} style={{ marginRight: 6 }} />
+                    <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                      Trabajo realizado
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {appData.status === 'rejected' && (
+                  <View style={styles.statusBanner}>
+                    <Ionicons name="close-circle" size={20} color="#fff" />
+                    <Text style={styles.bannerText}>Postulación rechazada</Text>
+                  </View>
+                )}
+              </>
+            )
           )}
         </View>
       )}
@@ -241,7 +350,7 @@ export default function DetailScreen({ route, navigation }: Props) {
               placeholder={isInformal ? '$ 100.000' : '6'}
               placeholderTextColor={colors.textLight}
               value={completionValue}
-              onChangeText={setCompletionValue}
+              onChangeText={(t) => setCompletionValue(isInformal ? formatSalaryNumber(t) : t)}
             />
             <View style={styles.modalBtnRow}>
               <TouchableOpacity style={styles.modalCancel} onPress={() => setShowCompleteModal(false)}>
@@ -357,38 +466,52 @@ function JobDetail({ data, colors, isDark }: { data: any; colors: any; isDark: b
 
 function CandidateDetail({ data, appData, colors, isDark, isRecruiter, onChat }: any) {
   const styles = makeStyles(colors, isDark);
+  const skills = Array.isArray(data.skills) ? data.skills : [];
+
   return (
     <View>
       <FadeInUp style={styles.candidateHeader}>
         <View style={styles.avatarRing}>
           <Image
-            source={{ uri: data.photoURL || 'https://via.placeholder.com/200.png?text=Foto' }}
+            source={{ uri: data.photoURL || data.photoUrl || 'https://via.placeholder.com/200.png?text=Foto' }}
             style={styles.candidateAvatar}
           />
         </View>
-        <Text style={styles.title}>{data.name}</Text>
+        <Text style={styles.title}>{data.name}{data.age ? `, ${data.age} años` : ''}</Text>
         <Text style={styles.subtitle}>{data.profession || 'Profesional'}</Text>
 
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+        {data.city && (
+          <View style={styles.candidateLocationRow}>
+            <Ionicons name="location-outline" size={14} color={colors.primary} />
+            <Text style={styles.candidateLocationText}>{data.city}</Text>
+          </View>
+        )}
+
+        <View style={styles.badgeRow}>
           {appData && (
             <View style={[styles.badge, {
               backgroundColor:
                 (appData.status === 'rejected' ? colors.reject :
                   (appData.status === 'accepted' ? colors.accept :
                     (appData.status === 'interview' ? '#5DA8FF' : colors.primary))) + '22',
+              borderColor:
+                (appData.status === 'rejected' ? colors.reject :
+                  (appData.status === 'accepted' ? colors.accept :
+                    (appData.status === 'interview' ? '#5DA8FF' : colors.primary))) + '55',
             }]}>
-              <Text style={{
-                ...type.caption,
+              <Text style={[styles.badgeText, {
                 color: appData.status === 'rejected' ? colors.reject :
                   (appData.status === 'accepted' ? colors.accept :
                     (appData.status === 'interview' ? '#5DA8FF' : colors.primary)),
-              }}>
-                {appData.status.toUpperCase()}
+              }]}>
+                {appData.status === 'rejected' ? 'RECHAZADO' :
+                 appData.status === 'accepted' ? 'CONTRATADO' :
+                 appData.status === 'interview' ? 'ENTREVISTA' : 'PENDIENTE'}
               </Text>
             </View>
           )}
 
-          {isRecruiter && (
+          {isRecruiter && appData && (
             <TouchableOpacity style={styles.chatIconBtn} onPress={onChat} activeOpacity={0.85}>
               <Ionicons name="chatbubble-ellipses" size={20} color={colors.primary} />
             </TouchableOpacity>
@@ -397,19 +520,55 @@ function CandidateDetail({ data, appData, colors, isDark, isRecruiter, onChat }:
 
         {!appData && isRecruiter && (
           <PressScale style={styles.chatPillBtn} onPress={onChat}>
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={isDark ? '#000' : '#fff'} />
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.onPrimary} />
             <Text style={styles.chatPillText}>Iniciar chat</Text>
           </PressScale>
         )}
 
         {appData?.interviewDate && (
-          <Text style={styles.interviewDateText}>
-            Entrevista · {new Date(appData.interviewDate).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}
-          </Text>
+          <View style={styles.interviewInfoBox}>
+            <Ionicons name="calendar" size={14} color={colors.primary} />
+            <Text style={styles.interviewDateText}>
+              Entrevista: {new Date(appData.interviewDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+            </Text>
+          </View>
         )}
       </FadeInUp>
 
       <FadeInUp delay={80} style={styles.content}>
+        {/* GRID DE DETALLES DEL PERFIL COMPLETO DE LA PERSONA */}
+        {(data.experienceYears || data.education || data.industry) && (
+          <View style={styles.detailGrid}>
+            {data.experienceYears ? (
+              <View style={styles.detailItem}>
+                <Ionicons name="star-outline" size={14} color={colors.primary} />
+                <Text style={styles.detailText}>{data.experienceYears} años exp</Text>
+              </View>
+            ) : null}
+
+            {data.education ? (
+              <View style={styles.detailItem}>
+                <Ionicons name="school-outline" size={14} color={colors.primary} />
+                <Text style={styles.detailText}>{data.education}</Text>
+              </View>
+            ) : null}
+
+            {data.industry ? (
+              <View style={styles.detailItem}>
+                <Ionicons name="briefcase-outline" size={14} color={colors.primary} />
+                <Text style={styles.detailText}>{data.industry}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {data.jobDescription ? (
+          <>
+            <Text style={styles.sectionTitle}>Trabajo buscado</Text>
+            <Text style={styles.sectionText}>{data.jobDescription}</Text>
+          </>
+        ) : null}
+
         {data.bio ? (
           <>
             <Text style={styles.sectionTitle}>Sobre mí</Text>
@@ -417,11 +576,11 @@ function CandidateDetail({ data, appData, colors, isDark, isRecruiter, onChat }:
           </>
         ) : null}
 
-        {data.skills && data.skills.length > 0 && (
+        {skills.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Habilidades</Text>
+            <Text style={styles.sectionTitle}>Habilidades / Aptitudes</Text>
             <View style={styles.chipsWrap}>
-              {data.skills.map((s: string, i: number) => (
+              {skills.map((s: string, i: number) => (
                 <View key={i} style={styles.softChip}>
                   <Text style={styles.softChipText}>{s}</Text>
                 </View>
@@ -430,16 +589,46 @@ function CandidateDetail({ data, appData, colors, isDark, isRecruiter, onChat }:
           </>
         )}
 
+        {/* DATOS DE CONTACTO */}
+        {(data.email || data.phone || data.whatsapp) && (
+          <>
+            <Text style={styles.sectionTitle}>Información de contacto</Text>
+            <View style={styles.contactContainer}>
+              {data.email ? (
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`mailto:${data.email}`)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="mail-outline" size={18} color={colors.primary} />
+                  <Text style={styles.contactText}>{data.email}</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {(data.phone || data.whatsapp) ? (
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  onPress={() => Linking.openURL(`tel:${data.phone || data.whatsapp}`)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="call-outline" size={18} color={colors.primary} />
+                  <Text style={styles.contactText}>{data.phone || data.whatsapp}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </>
+        )}
+
         {data.resumeURL && (
           <PressScale style={styles.cvBox} onPress={() => Linking.openURL(data.resumeURL)}>
             <View style={styles.cvIconWrap}>
-              <Ionicons name="document-text" size={20} color={isDark ? '#000' : '#fff'} />
+              <Ionicons name="document-text" size={20} color={colors.onPrimary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cvText}>Ver hoja de vida</Text>
               <Text style={styles.cvSubtext}>Toca para abrir el PDF</Text>
             </View>
-            <Ionicons name="open-outline" size={18} color={isDark ? '#000' : '#fff'} />
+            <Ionicons name="open-outline" size={18} color={colors.onPrimary} />
           </PressScale>
         )}
       </FadeInUp>
@@ -475,9 +664,17 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.08)',
   },
 
-  content: { padding: SIZES.lg },
-  title: { ...type.display, color: colors.text, marginTop: 4 },
-  subtitle: { ...type.bodyMd, color: colors.textLight, marginTop: 4 },
+  content: { padding: SIZES.lg, paddingBottom: 150 },
+  title: { ...type.display, color: colors.text, marginTop: 4, textAlign: 'center' },
+  subtitle: { ...type.bodyMd, color: colors.textLight, marginTop: 4, textAlign: 'center' },
+
+  candidateLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  candidateLocationText: { ...type.caption, color: colors.primary, fontFamily: FONTS.semibold },
 
   infoRow: { flexDirection: 'row', gap: 8, marginTop: SIZES.md, flexWrap: 'wrap' },
   infoChip: {
@@ -490,6 +687,47 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 
   sectionTitle: { ...type.overline, color: colors.textLight, marginTop: SIZES.lg, marginBottom: SIZES.sm },
   sectionText: { ...type.body, color: colors.text, lineHeight: 23 },
+
+  detailGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: SIZES.md,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: isDark ? 'rgba(232,197,108,0.08)' : 'rgba(10,10,10,0.04)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: SIZES.radius_full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  detailText: { ...type.small, color: colors.text, fontFamily: FONTS.semibold },
+
+  contactContainer: {
+    gap: 8,
+    marginTop: 4,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.inputBackground,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  contactText: {
+    ...type.body,
+    color: colors.text,
+    fontFamily: FONTS.medium,
+  },
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   softChip: {
@@ -507,15 +745,19 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 
   candidateHeader: {
     alignItems: 'center',
-    paddingTop: SIZES.xl, paddingBottom: SIZES.lg,
+    paddingTop: SIZES.xl + 20,
+    paddingBottom: SIZES.lg,
+    paddingHorizontal: SIZES.lg,
     backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   avatarRing: {
     padding: 4, borderRadius: 70,
     borderWidth: 2, borderColor: colors.primary,
-    marginBottom: SIZES.md,
+    marginBottom: SIZES.sm,
   },
-  candidateAvatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: colors.inputBackground },
+  candidateAvatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.inputBackground },
 
   cvBox: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -527,16 +769,37 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  cvText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  cvText: { ...type.button, color: colors.onPrimary },
   cvSubtext: { ...type.caption, color: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.75)', marginTop: 2 },
 
-  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: SIZES.radius_full },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  badge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: SIZES.radius_full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    ...type.caption,
+    fontFamily: FONTS.bold,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
   badgeSmall: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: SIZES.radius_full, alignSelf: 'flex-start' },
   badgeTextSmall: { ...type.caption },
 
   chatIconBtn: {
     backgroundColor: isDark ? 'rgba(232,197,108,0.10)' : 'rgba(10,10,10,0.05)',
     padding: 10, borderRadius: 22,
+    borderWidth: 1, borderColor: colors.border,
   },
   chatPillBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -544,39 +807,63 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 12,
     backgroundColor: colors.primary, borderRadius: SIZES.radius_full,
   },
-  chatPillText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  chatPillText: { ...type.button, color: colors.onPrimary },
+
+  interviewInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: isDark ? 'rgba(93,168,255,0.10)' : 'rgba(93,168,255,0.08)',
+    borderRadius: SIZES.radius_full,
+    borderWidth: 1,
+    borderColor: '#5DA8FF',
+  },
+  interviewDateText: { ...type.caption, color: colors.text, fontFamily: FONTS.semibold },
 
   actionFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: SIZES.lg, paddingBottom: SIZES.xl,
+    paddingHorizontal: SIZES.lg,
+    paddingTop: SIZES.md,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     backgroundColor: colors.card,
     borderTopWidth: 1, borderTopColor: colors.border,
     ...(isDark ? {} : SHADOWS.medium),
   },
-  btnRow: { flexDirection: 'row', gap: 10 },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   actionBtn: {
-    flex: 1, flexDirection: 'row', gap: 8,
-    paddingVertical: 14, borderRadius: SIZES.radius_full,
-    alignItems: 'center', justifyContent: 'center',
+    flex: 1,
+    height: 52, // Dimensiones exactamente idénticas de 52px de alto
+    borderRadius: SIZES.radius_full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
   },
   btnReject: {
     backgroundColor: 'transparent',
-    borderWidth: 1, borderColor: colors.reject,
+    borderWidth: 1.5,
+    borderColor: colors.reject,
   },
   btnAccept: { backgroundColor: '#5DA8FF' },
   btnHire: { backgroundColor: colors.accept },
-  btnComplete: { backgroundColor: colors.primary },
-  btnText: { ...type.button, color: isDark ? '#000' : '#fff' },
-  btnTextLight: { ...type.button, color: colors.reject },
+  btnComplete: { backgroundColor: colors.primary, height: 52 },
+  btnText: { ...type.button, color: colors.onPrimary, textAlign: 'center', fontSize: 13 },
+  btnTextLight: { ...type.button, color: colors.reject, textAlign: 'center', fontSize: 13 },
 
   statusBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, backgroundColor: colors.reject, padding: 14,
     borderRadius: SIZES.radius_full,
+    height: 52,
   },
   bannerText: { ...type.button, color: '#fff' },
-
-  interviewDateText: { marginTop: 14, ...type.small, color: colors.primary },
 
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
@@ -603,5 +890,5 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   cancelText: { ...type.button, color: colors.textLight },
-  submitText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  submitText: { ...type.button, color: colors.onPrimary },
 });

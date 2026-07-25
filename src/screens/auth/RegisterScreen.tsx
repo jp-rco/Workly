@@ -53,6 +53,7 @@ export default function RegisterScreen({ navigation }: Props) {
         name,
         userType,
         createdAt: new Date().toISOString(),
+        onboardingPending: true,
       };
       await setDoc(doc(db, 'users', userCredential.user.uid), userData);
     } catch (error: any) {
@@ -83,12 +84,12 @@ export default function RegisterScreen({ navigation }: Props) {
         onPress={() => setUserType(type)}
       >
         <View style={[styles.typeIconWrap, active && styles.typeIconWrapActive]}>
-          <Ionicons name={icon} size={22} color={active ? '#000' : colors.textLight} />
+          <Ionicons name={icon} size={22} color={active ? colors.onPrimary : colors.textLight} />
         </View>
         <Text style={[styles.typeText, active && styles.typeTextActive]}>{title}</Text>
         <Text style={styles.typeDesc}>{description}</Text>
         {active && <View style={styles.typeCheck}>
-          <Ionicons name="checkmark" size={12} color="#000" />
+          <Ionicons name="checkmark" size={12} color={colors.onPrimary} />
         </View>}
       </PressScale>
     );
@@ -100,7 +101,8 @@ export default function RegisterScreen({ navigation }: Props) {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 20}
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -231,11 +233,11 @@ export default function RegisterScreen({ navigation }: Props) {
                 disabled={loading}
               >
                 {loading ? (
-                  <ActivityIndicator color="#000" />
+                  <ActivityIndicator color={colors.onPrimary} />
                 ) : (
                   <>
                     <Text style={styles.registerButtonText}>Crear Cuenta</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginLeft: 6 }} />
+                    <Ionicons name="arrow-forward" size={18} color={colors.onPrimary} style={{ marginLeft: 6 }} />
                   </>
                 )}
               </PressScale>
@@ -276,7 +278,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
     scrollContent: {
       paddingHorizontal: SIZES.lg,
       paddingTop: SIZES.lg,
-      paddingBottom: SIZES.xxl,
+      paddingBottom: 130,
     },
     eyebrow: {
       fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -415,7 +417,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       elevation: 6,
     },
     registerButtonText: {
-      color: '#000000',
+      color: colors.onPrimary,
       fontFamily: 'PlusJakartaSans_700Bold',
       fontSize: 16,
       letterSpacing: 0.2,

@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Image, TouchableOpacity,
-  ActivityIndicator, RefreshControl, ScrollView, Platform,
+  ActivityIndicator, RefreshControl, ScrollView, Platform, Alert,
 } from 'react-native';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -230,12 +230,35 @@ export default function MatchesScreen() {
     </FadeInUp>
   );
 
+  const handleDeleteInterest = (likeDocId: string, candidateName: string) => {
+    Alert.alert(
+      'Quitar de interés',
+      `¿Deseas quitar a ${candidateName} de tu lista de personas de interés?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Quitar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'likes', likeDocId));
+              setInterestProfiles((prev) => prev.filter((p) => p.id !== likeDocId));
+            } catch (e) {
+              console.error('Error deleting interest:', e);
+              Alert.alert('Error', 'No se pudo quitar el perfil.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderLikedCard = ({ item, index }: { item: LikedUser; index: number }) => (
     <FadeInUp delay={Math.min(index * 30, 200)}>
       <View style={styles.cardWrapper}>
         <TouchableOpacity
           style={styles.card}
-          onPress={() => navigation.navigate('Detail', { id: item.userId, type: 'Candidate' })}
+          onPress={() => navigation.navigate('Detail', { id: item.userId, type: 'Candidate', fromMatches: true })}
           activeOpacity={0.85}
         >
           <Image source={{ uri: item.photoURL || 'https://via.placeholder.com/100.png?text=Perfil' }} style={styles.avatar} />
@@ -253,6 +276,14 @@ export default function MatchesScreen() {
           onPress={() => navigation.navigate('Chat', { otherUserId: item.userId, jobTitle: item.name })}
         >
           <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.trashBtn}
+          activeOpacity={0.85}
+          onPress={() => handleDeleteInterest(item.id, item.name)}
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.reject} />
         </TouchableOpacity>
       </View>
     </FadeInUp>
@@ -426,7 +457,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   activeTab: { backgroundColor: colors.primary },
   tabText: { ...type.button, color: colors.textLight },
-  activeTabText: { color: isDark ? '#000' : '#fff' },
+  activeTabText: { color: colors.onPrimary },
 
   filterWrapper: {
     backgroundColor: colors.headerBg,
@@ -442,9 +473,9 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   activeFilterChip: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterChipText: { ...type.small, color: colors.textLight },
-  activeFilterChipText: { color: isDark ? '#000' : '#fff' },
+  activeFilterChipText: { color: colors.onPrimary },
 
-  listContent: { padding: SIZES.md, gap: 10 },
+  listContent: { padding: SIZES.md, gap: 10, paddingBottom: 130 },
 
   cardWrapper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   card: {
@@ -479,5 +510,11 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.card,
     borderWidth: 1, borderColor: colors.border,
+  },
+  trashBtn: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(255,77,77,0.12)' : 'rgba(255,77,77,0.08)',
+    borderWidth: 1, borderColor: colors.reject + '33',
   },
 });

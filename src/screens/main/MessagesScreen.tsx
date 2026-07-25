@@ -187,7 +187,7 @@ export default function MessagesScreen() {
           renderItem={renderConversation}
           keyExtractor={item => item.id}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          contentContainerStyle={{ paddingVertical: 6 }}
+          contentContainerStyle={{ paddingTop: 6, paddingBottom: 130 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(true)} tintColor={colors.primary} />}
         />
       )}
@@ -221,7 +221,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   activeTab: { backgroundColor: colors.primary },
   tabText: { ...type.small, color: colors.textLight },
-  activeTabText: { color: isDark ? '#000' : '#fff' },
+  activeTabText: { color: colors.onPrimary },
 
   row: { flexDirection: 'row', paddingHorizontal: SIZES.lg, paddingVertical: 14, alignItems: 'center', gap: 14 },
   avatarRing: {
@@ -244,7 +244,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7,
     backgroundColor: colors.primary,
   },
-  unreadCountText: { ...type.caption, color: isDark ? '#000' : '#fff' },
+  unreadCountText: { ...type.caption, color: colors.onPrimary },
 
   separator: { height: 1, marginLeft: SIZES.lg + 60, backgroundColor: colors.border, opacity: 0.5 },
 

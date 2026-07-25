@@ -65,9 +65,10 @@ export default function ProfileScreen({ navigation }: Props) {
   const isSearching = userProfile.userType === 'Searching';
 
   const handleSwitchRole = async () => {
+    const targetRoleName = isSearching ? 'Reclutador / Empresa' : 'Buscador de Empleo';
     Alert.alert(
-      'Cambiar rol',
-      `¿Cambiar a modo ${isSearching ? 'Reclutador' : 'Candidato'}? Tu feed y opciones cambiarán.`,
+      'Cambiar de perfil',
+      `¿Deseas cambiar al perfil de ${targetRoleName}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -75,10 +76,25 @@ export default function ProfileScreen({ navigation }: Props) {
           onPress: async () => {
             setSwitching(true);
             try {
+              const { isFirstTime, targetRole } = await switchRole();
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              await switchRole();
-            } catch {
-              Alert.alert('Error', 'No se pudo cambiar el rol');
+              if (isFirstTime) {
+                Alert.alert(
+                  '¡Nuevo perfil creado!',
+                  `Se creó tu perfil de ${targetRole === 'Hiring' ? 'Contratante / Empresa' : 'Buscador de Empleo'}. Configura la información de este nuevo perfil.`,
+                  [
+                    {
+                      text: 'Configurar perfil ahora',
+                      onPress: () => navigation.navigate('EditProfile'),
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert('Perfil cambiado', `Ahora estás en tu perfil de ${targetRole === 'Hiring' ? 'Contratante' : 'Candidato'}.`);
+              }
+            } catch (e) {
+              console.error(e);
+              Alert.alert('Error', 'No se pudo cambiar el perfil');
             } finally {
               setSwitching(false);
             }
@@ -142,7 +158,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
           <View style={s.heroActions}>
             <PressScale style={s.primaryBtn} onPress={() => navigation.navigate('EditProfile')}>
-              <Ionicons name="create-outline" size={16} color={isDark ? '#000' : '#fff'} />
+              <Ionicons name="create-outline" size={16} color={colors.onPrimary} />
               <Text style={s.primaryBtnText}>Editar perfil</Text>
             </PressScale>
             <TouchableOpacity style={s.ghostBtn} onPress={logout} activeOpacity={0.8}>
@@ -181,9 +197,9 @@ export default function ProfileScreen({ navigation }: Props) {
 
             {userProfile.resumeURL && (
               <PressScale style={s.cvButton} onPress={() => Linking.openURL(userProfile.resumeURL!)}>
-                <Ionicons name="document-text" size={18} color={isDark ? '#000' : '#fff'} />
+                <Ionicons name="document-text" size={18} color={colors.onPrimary} />
                 <Text style={s.cvButtonText}>Ver hoja de vida (PDF)</Text>
-                <Ionicons name="open-outline" size={16} color={isDark ? '#000' : '#fff'} style={{ marginLeft: 'auto' }} />
+                <Ionicons name="open-outline" size={16} color={colors.onPrimary} style={{ marginLeft: 'auto' }} />
               </PressScale>
             )}
           </>
@@ -239,7 +255,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: SIZES.lg, paddingBottom: SIZES.xxl },
+  content: { padding: SIZES.lg, paddingBottom: 130 },
 
   topControls: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -282,11 +298,11 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 
   heroActions: { flexDirection: 'row', gap: 10, marginTop: SIZES.lg, alignSelf: 'stretch' },
   primaryBtn: {
-    flex: 1, flexDirection: 'row', gap: 8,
-    paddingVertical: 14, borderRadius: SIZES.radius_full,
-    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+    flex: 1, flexDirection: 'row', gap: 10,
+    paddingVertical: 14, borderRadius: SIZES.radius_full, paddingLeft: 20, paddingRight: 20,
+    backgroundColor: colors.primary, alignSelf: 'center', justifyContent: 'center',
   },
-  primaryBtnText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  primaryBtnText: { ...type.button, color: colors.onPrimary },
   ghostBtn: {
     width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
@@ -316,7 +332,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backgroundColor: colors.primary, padding: 14,
     borderRadius: SIZES.radius_full, marginTop: SIZES.md,
   },
-  cvButtonText: { ...type.button, color: isDark ? '#000' : '#fff' },
+  cvButtonText: { ...type.button, color: colors.onPrimary },
 
   infoGrid: { flexDirection: 'row', gap: 16, marginTop: 4 },
   infoItem: { flex: 1 },

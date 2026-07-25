@@ -86,7 +86,7 @@ const TabItem = ({
           color={isFocused ? colors.primary : colors.textLight}
         />
         {badge !== undefined && badge !== 0 && (
-          <View style={[styles.badge, { backgroundColor: colors.reject }]}>
+          <View style={[styles.badge, { backgroundColor: colors.reject, borderColor: colors.card }]}>
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
         )}

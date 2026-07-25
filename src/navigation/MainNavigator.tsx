@@ -19,6 +19,8 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { CustomTabBar } from '../components/common/CustomTabBar';
 
+import CompleteProfileScreen from '../screens/auth/CompleteProfileScreen';
+
 export type MainTabParamList = {
   Home: undefined;
   Messages: undefined;
@@ -30,7 +32,7 @@ export type MainTabParamList = {
 export type MainStackParamList = {
   Tabs: undefined;
   EditProfile: undefined;
-  Detail: { id: string; type: 'Job' | 'Candidate'; applicationId?: string };
+  Detail: { id: string; type: 'Job' | 'Candidate'; applicationId?: string; fromMatches?: boolean };
   Chat: { applicationId?: string; otherUserId: string; jobTitle: string };
 };
 
@@ -109,7 +111,12 @@ function TabNavigator() {
 }
 
 export default function MainNavigator() {
+  const { userProfile } = useAuth();
   const { colors } = useTheme();
+
+  if (userProfile?.onboardingPending) {
+    return <CompleteProfileScreen />;
+  }
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

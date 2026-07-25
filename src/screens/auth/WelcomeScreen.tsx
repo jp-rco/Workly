@@ -48,7 +48,7 @@ export default function WelcomeScreen({ navigation }: Props) {
   }, [glow]);
 
   const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.12] });
-  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.42] });
+  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: isDark ? [0.18, 0.42] : [0.08, 0.22] });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -131,7 +131,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       width: width * 1.4,
       height: width * 1.4,
       borderRadius: width,
-      backgroundColor: colors.primary,
+      backgroundColor: isDark ? colors.primary : colors.accent,
     },
     gridDot1: {
       position: 'absolute',
@@ -140,7 +140,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       width: 4,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.primary,
+      backgroundColor: isDark ? colors.primary : colors.accent,
       opacity: 0.5,
     },
     gridDot2: {
@@ -150,7 +150,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       width: 6,
       height: 6,
       borderRadius: 3,
-      backgroundColor: colors.primary,
+      backgroundColor: isDark ? colors.primary : colors.accent,
       opacity: 0.35,
     },
     gridDot3: {
@@ -160,7 +160,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       width: 3,
       height: 3,
       borderRadius: 1.5,
-      backgroundColor: colors.primary,
+      backgroundColor: isDark ? colors.primary : colors.accent,
       opacity: 0.6,
     },
     content: {
@@ -211,7 +211,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       width: 48,
       height: 3,
       borderRadius: 2,
-      backgroundColor: colors.primary,
+      backgroundColor: isDark ? colors.primary : colors.accent,
       marginTop: SIZES.md,
       marginBottom: SIZES.lg,
       alignSelf: 'center',
@@ -226,7 +226,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
     },
     subtitleAccent: {
       fontFamily: 'PlusJakartaSans_700Bold',
-      color: colors.primary,
+      color: isDark ? colors.primary : colors.accent,
     },
     buttonContainer: {
       width: '100%',
@@ -245,7 +245,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       elevation: 6,
     },
     primaryButtonText: {
-      color: '#000000',
+      color: colors.onPrimary,
       fontFamily: 'PlusJakartaSans_700Bold',
       fontSize: 16,
       letterSpacing: 0.2,

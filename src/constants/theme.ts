@@ -12,6 +12,7 @@ export const lightColors = {
   primary: '#0A0A0A',   // Negro puro como acción principal en light
   primaryGlow: '#1A1A1A',
   accent: '#C8A24B',   // Dorado elegante (uso secundario)
+  onPrimary: '#FFFFFF', // Texto/icono sobre fondo primario (blanco en light)
 
   // Superficies
   background: '#FAFAF7',   // Off-white cálido (no blanco quirúrgico)
@@ -21,7 +22,7 @@ export const lightColors = {
 
   // Texto
   text: '#0A0A0A',
-  textLight: '#7A7770',
+  textLight: '#66635C',
   white: '#FFFFFF',
 
   // Bordes
@@ -38,6 +39,7 @@ export const darkColors = {
   primary: '#E8C56C',   // Dorado vivo en dark = acento primario
   primaryGlow: '#F4D98A',
   accent: '#E8C56C',
+  onPrimary: '#000000', // Texto/icono sobre fondo primario (negro en dark)
 
   // Superficies — NEGRO puro, sin tinte azul
   background: '#000000',
