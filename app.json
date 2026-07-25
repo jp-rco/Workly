@@ -17,6 +17,9 @@
       "bundleIdentifier": "workly",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyDb-URfKr_LJLU51D5X5qKvG0hAy-MpNjg"
       }
     },
     "android": {
@@ -28,9 +31,19 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
       ],
-      "package": "com.jp_rco2.workly"
+      "package": "com.jp_rco2.workly",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDb-URfKr_LJLU51D5X5qKvG0hAy-MpNjg"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +55,20 @@
           "microphonePermission": "Permite a Workly acceder al micrófono para grabar notas de voz en el chat."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite a Workly acceder a tus fotos para tu perfil y el chat.",
+          "cameraPermission": "Permite a Workly usar la cámara para tomar fotos de perfil y enviar imágenes."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permite a Workly acceder a tu ubicación para mostrar trabajos cercanos."
+        }
+      ],
+      "expo-document-picker",
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-asset"

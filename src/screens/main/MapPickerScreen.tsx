@@ -30,6 +30,7 @@ export default function MapPickerScreen({
   const mapRef = useRef<MapView>(null);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState(false);
+  const [locationGranted, setLocationGranted] = useState(false);
   const [markerCoord, setMarkerCoord] = useState({
     latitude: initialLatitude || 4.7110,
     longitude: initialLongitude || -74.0721,
@@ -41,13 +42,17 @@ export default function MapPickerScreen({
 
   useEffect(() => {
     (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      const granted = status === 'granted';
+      setLocationGranted(granted);
+
       if (initialLatitude && initialLongitude) {
         await reverseGeocode(initialLatitude, initialLongitude);
         setLoading(false);
         return;
       }
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
+      
+      if (granted) {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         const coord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
         setMarkerCoord(coord);
@@ -144,12 +149,11 @@ export default function MapPickerScreen({
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider="google"
         userInterfaceStyle={isDark ? 'dark' : 'light'}
         initialRegion={{ ...markerCoord, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
         onPress={handleMapPress}
-        showsUserLocation
-        showsMyLocationButton
+        showsUserLocation={locationGranted}
+        showsMyLocationButton={locationGranted}
       >
         <Marker coordinate={markerCoord} pinColor={colors.primary} />
       </MapView>

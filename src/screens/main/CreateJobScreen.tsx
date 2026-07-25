@@ -66,6 +66,7 @@ export default function CreateJobScreen({ navigation }: Props) {
       const requirements = requirementsText.split(',').map((r) => r.trim()).filter(Boolean);
       await addDoc(collection(db, 'jobs'), {
         ownerUid: userProfile?.uid,
+        companyName: userProfile?.name || userProfile?.companyName || '',
         title: title.trim(), description: description.trim(),
         duration: duration.trim(), pay: pay.trim(),
         requirements, imageUrl,

@@ -20,6 +20,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import RootNavigator from './src/navigation/RootNavigator';
 
+
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
 function AppShell() {
