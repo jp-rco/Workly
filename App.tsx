@@ -18,8 +18,9 @@ import {
 
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { ModalProvider } from './src/context/ModalContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 import RootNavigator from './src/navigation/RootNavigator';
-
 
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
@@ -69,7 +70,11 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <AppShell />
+            <NotificationProvider>
+              <ModalProvider>
+                <AppShell />
+              </ModalProvider>
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

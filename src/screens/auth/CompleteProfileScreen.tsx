@@ -22,14 +22,16 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../firebase/config';
 import { SIZES, SHADOWS, type, FONTS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { pickAndUploadImage } from '../../utils/uploadImage';
+import { pickImageFromSource } from '../../utils/uploadImage';
 import * as DocumentPicker from 'expo-document-picker';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useModal } from '../../context/ModalContext';
 
 export default function CompleteProfileScreen() {
   const { userProfile, refreshProfile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showImagePicker, showAlert } = useModal();
 
   const [loading, setLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -52,15 +54,32 @@ export default function CompleteProfileScreen() {
   const isSearching = userProfile?.userType === 'Searching';
   const styles = makeStyles(colors, isDark);
 
-  const handlePickPhoto = async () => {
+  const handlePickPhoto = () => {
+    if (!userProfile) return;
+    showImagePicker({
+      title: 'Foto de perfil',
+      message: '¿De dónde deseas obtener la foto para tu perfil?',
+      onCamera: () => processPhotoUpload(true),
+      onGallery: () => processPhotoUpload(false),
+    });
+  };
+
+  const processPhotoUpload = async (useCamera: boolean) => {
     if (!userProfile) return;
     setUploadingPhoto(true);
     try {
       const storagePath = `avatars/${userProfile.uid}/profile_${Date.now()}.jpg`;
-      const url = await pickAndUploadImage(storagePath, (p) => setPhotoProgress(p));
+      const { url, error } = await pickImageFromSource(useCamera, storagePath, (p) => setPhotoProgress(p));
+      if (error) {
+        showAlert({ title: 'Atención', message: error, type: 'warning' });
+        return;
+      }
       if (url) {
         setPhotoURL(url);
+        showAlert({ title: 'Foto seleccionada', message: 'Tu foto de perfil se ha preparado correctamente.', type: 'success' });
       }
+    } catch (err) {
+      showAlert({ title: 'Error', message: 'No se pudo cargar la imagen de perfil.', type: 'error' });
     } finally {
       setUploadingPhoto(false);
       setPhotoProgress(0);
@@ -88,7 +107,7 @@ export default function CompleteProfileScreen() {
         (snapshot) => setCvProgress(snapshot.bytesTransferred / snapshot.totalBytes),
         (error) => {
           console.error('CV upload error:', error);
-          Alert.alert('Error', 'No se pudo subir el CV');
+          showAlert({ title: 'Error', message: 'No se pudo subir la hoja de vida.', type: 'error' });
           setUploadingCV(false);
           setCvProgress(0);
         },
@@ -97,12 +116,12 @@ export default function CompleteProfileScreen() {
           setResumeURL(downloadURL);
           setUploadingCV(false);
           setCvProgress(0);
-          Alert.alert('CV cargado', `Archivo preparado: ${file.name}`);
+          showAlert({ title: 'CV cargado', message: `Archivo preparado: ${file.name}`, type: 'success' });
         }
       );
     } catch (err) {
       console.error('CV pick error:', err);
-      Alert.alert('Error', 'No se pudo seleccionar el archivo');
+      showAlert({ title: 'Error', message: 'No se pudo seleccionar el archivo de CV.', type: 'error' });
       setUploadingCV(false);
     }
   };
@@ -116,7 +135,7 @@ export default function CompleteProfileScreen() {
       await refreshProfile();
     } catch (e) {
       console.error('Error skipping profile setup:', e);
-      Alert.alert('Error', 'No se pudo omitir en este momento.');
+      showAlert({ title: 'Error', message: 'No se pudo omitir en este momento.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -144,26 +163,20 @@ export default function CompleteProfileScreen() {
             onboardingPending: false,
           }
         : {
-            name,
+            companyName: name,
+            name: name,
             photoURL: photoURL || null,
-            location: city,
             industry: profession,
+            location: city,
             companyDescription: bio,
             onboardingPending: false,
           };
 
-      // Limpiar campos undefined/null para Firestore
-      Object.keys(updateData).forEach((key) => {
-        if ((updateData as any)[key] === undefined) {
-          delete (updateData as any)[key];
-        }
-      });
-
       await updateDoc(docRef, updateData);
       await refreshProfile();
     } catch (e) {
-      console.error('Error saving onboarding profile:', e);
-      Alert.alert('Error', 'No se pudo guardar la información del perfil.');
+      console.error('Error completing profile:', e);
+      showAlert({ title: 'Error', message: 'No se pudo guardar la información del perfil.', type: 'error' });
     } finally {
       setLoading(false);
     }

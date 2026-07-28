@@ -21,6 +21,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Login'>;
@@ -28,6 +29,7 @@ type Props = {
 
 export default function LoginScreen({ navigation }: Props) {
   const { colors, isDark } = useTheme();
+  const { showAlert } = useModal();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,7 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Por favor ingresa tu email y contraseña');
+      showAlert({ title: 'Datos incompletos', message: 'Por favor ingresa tu email y contraseña.', type: 'warning' });
       return;
     }
     setLoading(true);
@@ -44,7 +46,7 @@ export default function LoginScreen({ navigation }: Props) {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Error de inicio de sesión', 'Credenciales inválidas o el usuario no existe.');
+      showAlert({ title: 'Error de inicio de sesión', message: 'Credenciales inválidas o el usuario no existe.', type: 'error' });
     } finally {
       setLoading(false);
     }

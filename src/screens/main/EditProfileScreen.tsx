@@ -13,15 +13,17 @@ import { SIZES, SHADOWS, type } from '../../constants/theme';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../../navigation/MainNavigator';
 import { Ionicons } from '@expo/vector-icons';
-import { pickAndUploadImage } from '../../utils/uploadImage';
+import { pickImageFromSource } from '../../utils/uploadImage';
 import * as DocumentPicker from 'expo-document-picker';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 type Props = { navigation: NativeStackNavigationProp<MainStackParamList, 'EditProfile'>; };
 
 export default function EditProfileScreen({ navigation }: Props) {
   const { userProfile, refreshProfile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showImagePicker, showAlert } = useModal();
 
   const [loading, setLoading] = useState(false);
 
@@ -34,41 +36,58 @@ export default function EditProfileScreen({ navigation }: Props) {
   const [resumeURL, setResumeURL] = useState(userProfile?.resumeURL || '');
   const [cvFileName, setCvFileName] = useState('');
 
-  const [name, setName] = useState(userProfile?.name || '');
-  const [bio, setBio] = useState(userProfile?.bio || userProfile?.companyDescription || '');
-  const [city, setCity] = useState(userProfile?.city || userProfile?.location || '');
-  const [role, setRole] = useState(userProfile?.profession || userProfile?.industry || '');
-  const [jobDescription, setJobDescription] = useState(userProfile?.jobDescription || '');
-  const [skillsText, setSkillsText] = useState(userProfile?.skills?.join(', ') || '');
+  const [name, setName] = useState('');
+  const [bio, setBio] = useState('');
+  const [city, setCity] = useState('');
+  const [role, setRole] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [skillsText, setSkillsText] = useState('');
 
   const isSearching = userProfile?.userType === 'Searching';
   const styles = makeStyles(colors, isDark);
 
   useEffect(() => {
     if (userProfile) {
-      setName(userProfile.userType === 'Searching' ? (userProfile.name || '') : (userProfile.companyName || userProfile.name || ''));
-      setBio(userProfile.userType === 'Searching' ? (userProfile.bio || '') : (userProfile.companyDescription || ''));
-      setCity(userProfile.userType === 'Searching' ? (userProfile.city || '') : (userProfile.location || ''));
-      setRole(userProfile.userType === 'Searching' ? (userProfile.profession || '') : (userProfile.industry || ''));
+      setName(userProfile.name || userProfile.companyName || '');
+      setBio(userProfile.bio || userProfile.companyDescription || '');
+      setCity(userProfile.city || userProfile.location || '');
+      setRole(userProfile.profession || userProfile.industry || '');
       setJobDescription(userProfile.jobDescription || '');
-      setSkillsText(userProfile.skills?.join(', ') || '');
+      setSkillsText(userProfile.skills ? userProfile.skills.join(', ') : '');
       setPhotoURL(userProfile.photoURL || '');
       setResumeURL(userProfile.resumeURL || '');
     }
   }, [userProfile]);
 
-  const handlePickPhoto = async () => {
+  const handlePickPhoto = () => {
+    if (!userProfile) return;
+    showImagePicker({
+      title: 'Foto de perfil',
+      message: '¿De dónde deseas obtener la foto para tu perfil?',
+      onCamera: () => processPhotoUpload(true),
+      onGallery: () => processPhotoUpload(false),
+    });
+  };
+
+  const processPhotoUpload = async (useCamera: boolean) => {
     if (!userProfile) return;
     setUploadingPhoto(true);
     try {
       const storagePath = `avatars/${userProfile.uid}/profile_${Date.now()}.jpg`;
-      const url = await pickAndUploadImage(storagePath, (p) => setPhotoProgress(p));
+      const { url, error } = await pickImageFromSource(useCamera, storagePath, (p) => setPhotoProgress(p));
+      if (error) {
+        showAlert({ title: 'Atención', message: error, type: 'warning' });
+        return;
+      }
       if (url) {
         setPhotoURL(url);
         await updateDoc(doc(db, 'users', userProfile.uid), { photoURL: url });
         await refreshProfile();
-        Alert.alert('Foto actualizada');
+        showAlert({ title: 'Foto actualizada', message: 'Tu foto de perfil ha sido actualizada.', type: 'success' });
       }
+    } catch (e) {
+      console.error('Photo upload error:', e);
+      showAlert({ title: 'Error', message: 'No se pudo subir la foto de perfil.', type: 'error' });
     } finally {
       setUploadingPhoto(false);
       setPhotoProgress(0);
@@ -94,7 +113,7 @@ export default function EditProfileScreen({ navigation }: Props) {
         (snapshot) => setCvProgress(snapshot.bytesTransferred / snapshot.totalBytes),
         (error) => {
           console.error('CV upload error:', error);
-          Alert.alert('Error', 'No se pudo subir el CV');
+          showAlert({ title: 'Error', message: 'No se pudo subir la hoja de vida.', type: 'error' });
           setUploadingCV(false); setCvProgress(0);
         },
         async () => {
@@ -103,11 +122,11 @@ export default function EditProfileScreen({ navigation }: Props) {
           await updateDoc(doc(db, 'users', userProfile.uid), { resumeURL: downloadURL });
           await refreshProfile();
           setUploadingCV(false); setCvProgress(0);
-          Alert.alert('CV subido', `Archivo: ${file.name}`);
+          showAlert({ title: 'CV subido', message: `El archivo ${file.name} ha sido guardado.`, type: 'success' });
         });
     } catch (err) {
       console.error('CV pick error:', err);
-      Alert.alert('Error', 'No se pudo seleccionar el archivo');
+      showAlert({ title: 'Error', message: 'No se pudo seleccionar el archivo de CV.', type: 'error' });
       setUploadingCV(false);
     }
   };
@@ -126,11 +145,15 @@ export default function EditProfileScreen({ navigation }: Props) {
       await updateDoc(docRef, updateData);
       await refreshProfile();
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      Alert.alert('Listo', 'Tu perfil fue actualizado.');
-      navigation.goBack();
+      showAlert({
+        title: 'Perfil actualizado',
+        message: 'Tus cambios han sido guardados exitosamente.',
+        type: 'success',
+        onConfirm: () => navigation.goBack(),
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'No se pudo actualizar el perfil');
+      showAlert({ title: 'Error', message: 'No se pudo actualizar el perfil.', type: 'error' });
     } finally { setLoading(false); }
   };
 

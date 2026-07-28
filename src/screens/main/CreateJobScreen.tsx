@@ -12,27 +12,27 @@ import { SIZES, SHADOWS, type, FONTS } from '../../constants/theme';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../../navigation/MainNavigator';
 import { Ionicons } from '@expo/vector-icons';
-import { pickAndUploadImage } from '../../utils/uploadImage';
+import { pickImageFromSource } from '../../utils/uploadImage';
 import MapPickerScreen, { PickedLocation } from './MapPickerScreen';
 import MapView, { Marker } from '../../components/common/AppMap';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
 import { formatSalaryNumber } from '../../utils/formatters';
+import { useModal } from '../../context/ModalContext';
 
 type Props = { navigation: BottomTabNavigationProp<MainTabParamList, 'CreateJob'>; };
 
 const FREQUENCY_OPTIONS = [
   'Por trabajo',
   'Por hora',
-  'Diario',
-  'Semanal',
-  'Quincenal',
-  'Mensual',
+  'Por día',
+  'Por mes',
   'Otro',
 ];
 
 export default function CreateJobScreen({ navigation }: Props) {
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showImagePicker, showAlert } = useModal();
 
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -43,7 +43,6 @@ export default function CreateJobScreen({ navigation }: Props) {
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('');
   
-  // NUEVOS ESTADOS DE SALARIO ALINEADOS HORIZONTALMENTE
   const [payAmount, setPayAmount] = useState('');
   const [payFrequency, setPayFrequency] = useState('Por trabajo');
   const [customFrequency, setCustomFrequency] = useState('');
@@ -56,13 +55,30 @@ export default function CreateJobScreen({ navigation }: Props) {
 
   const styles = makeStyles(colors, isDark);
 
-  const handlePickImage = async () => {
+  const handlePickImage = () => {
+    if (!userProfile) return;
+    showImagePicker({
+      title: 'Imagen de la oferta',
+      message: '¿De dónde deseas obtener la foto para la vacante?',
+      onCamera: () => processJobImageUpload(true),
+      onGallery: () => processJobImageUpload(false),
+    });
+  };
+
+  const processJobImageUpload = async (useCamera: boolean) => {
     if (!userProfile) return;
     setUploadingImage(true);
     try {
       const storagePath = `jobImages/${userProfile.uid}/job_${Date.now()}.jpg`;
-      const url = await pickAndUploadImage(storagePath, (p) => setUploadProgress(p));
+      const { url, error } = await pickImageFromSource(useCamera, storagePath, (p) => setUploadProgress(p));
+      if (error) {
+        showAlert({ title: 'Atención', message: error, type: 'warning' });
+        return;
+      }
       if (url) setImageUrl(url);
+    } catch (e) {
+      console.error('Job image upload error:', e);
+      showAlert({ title: 'Error', message: 'No se pudo subir la imagen de la oferta.', type: 'error' });
     } finally {
       setUploadingImage(false);
       setUploadProgress(0);
@@ -70,16 +86,23 @@ export default function CreateJobScreen({ navigation }: Props) {
   };
 
   const handlePostJob = async () => {
-    // Calcular la cadena combinada de salario y periodo
     const frequencyLabel = payFrequency === 'Otro' ? (customFrequency.trim() || 'Otro') : payFrequency;
     const finalPay = payAmount.trim() ? `${payAmount.trim()} / ${frequencyLabel}` : frequencyLabel;
 
     if (!title.trim() || !description.trim() || !duration.trim() || !finalPay.trim()) {
-      Alert.alert('Faltan datos', 'Completa: título, descripción, duración y salario.');
+      showAlert({
+        title: 'Faltan datos',
+        message: 'Por favor completa: título, descripción, duración y salario.',
+        type: 'warning',
+      });
       return;
     }
     if (!location) {
-      Alert.alert('Ubicación', 'Selecciona la ubicación en el mapa.');
+      showAlert({
+        title: 'Ubicación requerida',
+        message: 'Selecciona la ubicación exacta de la vacante en el mapa.',
+        type: 'warning',
+      });
       return;
     }
     setLoading(true);
@@ -96,12 +119,16 @@ export default function CreateJobScreen({ navigation }: Props) {
         jobSubType,
         createdAt: serverTimestamp(), status: 'active',
       });
-      Alert.alert('¡Publicada!', 'Tu vacante ya es visible para candidatos.', [
-        { text: 'OK', onPress: () => { resetForm(); navigation.navigate('Home'); } },
-      ]);
+      showAlert({
+        title: '¡Publicada!',
+        message: 'Tu oferta laboral ya es visible para candidatos en la plataforma.',
+        type: 'success',
+        buttonText: 'Ver mis publicaciones',
+        onConfirm: () => { resetForm(); navigation.navigate('Home'); },
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'No se pudo publicar la oferta.');
+      showAlert({ title: 'Error', message: 'No se pudo publicar la oferta laboral.', type: 'error' });
     } finally { setLoading(false); }
   };
 

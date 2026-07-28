@@ -1,68 +1,22 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, ActionSheetIOS, Platform } from 'react-native';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
-export async function pickAndUploadImage(
-  storagePath: string,
-  onProgress?: (progress: number) => void
-): Promise<string | null> {
-  // Ask where to get the image
-  return new Promise((resolve) => {
-    const options = ['Tomar Foto', 'Elegir de Galería', 'Cancelar'];
-    const cancelIndex = 2;
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: cancelIndex },
-        async (buttonIndex) => {
-          if (buttonIndex === cancelIndex) return resolve(null);
-          const useCamera = buttonIndex === 0;
-          const url = await _pickImage(useCamera, storagePath, onProgress);
-          resolve(url);
-        }
-      );
-    } else {
-      // Android: use Alert with buttons
-      Alert.alert('Seleccionar imagen', '¿De dónde quieres obtener la imagen?', [
-        {
-          text: 'Tomar Foto',
-          onPress: async () => {
-            const url = await _pickImage(true, storagePath, onProgress);
-            resolve(url);
-          },
-        },
-        {
-          text: 'Galería',
-          onPress: async () => {
-            const url = await _pickImage(false, storagePath, onProgress);
-            resolve(url);
-          },
-        },
-        { text: 'Cancelar', style: 'cancel', onPress: () => resolve(null) },
-      ]);
-    }
-  });
-}
-
-async function _pickImage(
+export async function pickImageFromSource(
   useCamera: boolean,
   storagePath: string,
   onProgress?: (progress: number) => void
-): Promise<string | null> {
+): Promise<{ url: string | null; error?: string }> {
   try {
-    // Request permissions
     if (useCamera) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'Se necesita acceso a la cámara');
-        return null;
+        return { url: null, error: 'Se necesita acceso a la cámara para tomar fotos.' };
       }
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'Se necesita acceso a la galería');
-        return null;
+        return { url: null, error: 'Se necesita acceso a la galería para seleccionar fotos.' };
       }
     }
 
@@ -80,15 +34,30 @@ async function _pickImage(
           quality: 0.7,
         });
 
-    if (result.canceled || !result.assets?.[0]?.uri) return null;
+    if (result.canceled || !result.assets?.[0]?.uri) {
+      return { url: null };
+    }
 
     const uri = result.assets[0].uri;
-    return await uploadToFirebase(uri, storagePath, onProgress);
-  } catch (err) {
+    const url = await uploadToFirebase(uri, storagePath, onProgress);
+    if (!url) {
+      return { url: null, error: 'No se pudo subir la imagen a Firebase Storage.' };
+    }
+    return { url };
+  } catch (err: any) {
     console.error('Image pick error:', err);
-    Alert.alert('Error', 'No se pudo obtener la imagen');
-    return null;
+    return { url: null, error: 'Ocurrió un error insospechado al procesar la imagen.' };
   }
+}
+
+export async function pickAndUploadImage(
+  storagePath: string,
+  onProgress?: (progress: number) => void,
+  useCamera?: boolean
+): Promise<string | null> {
+  const isCamera = useCamera ?? false;
+  const res = await pickImageFromSource(isCamera, storagePath, onProgress);
+  return res.url;
 }
 
 export async function uploadToFirebase(
@@ -111,8 +80,7 @@ export async function uploadToFirebase(
         },
         (error) => {
           console.error('Upload error:', error);
-          Alert.alert('Error', 'No se pudo subir la imagen');
-          reject(null);
+          resolve(null);
         },
         async () => {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);

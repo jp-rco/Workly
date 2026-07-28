@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,6 +38,7 @@ export interface UserProfile {
   createdAt?: number | string;
   onboardingPending?: boolean;
   isDualProfile?: boolean;
+  pushToken?: string;
 }
 
 interface SwitchRoleResult {
@@ -52,6 +53,7 @@ interface AuthContextData {
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   switchRole: () => Promise<SwitchRoleResult>;
+  updatePushToken: (token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -89,6 +91,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetchProfile(user.uid);
     }
   };
+
+  const updatePushToken = useCallback(async (token: string) => {
+    if (!user || !userProfile) return;
+    if (userProfile.pushToken === token) return;
+    
+    try {
+      const docRef = doc(db, 'users', userProfile.uid);
+      await updateDoc(docRef, { pushToken: token });
+      setUserProfile((prev) => prev ? { ...prev, pushToken: token } : null);
+    } catch (error) {
+      console.error('Error updating push token:', error);
+    }
+  }, [user, userProfile]);
 
   const switchRole = async (): Promise<SwitchRoleResult> => {
     if (!user || !userProfile) {
@@ -180,7 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, logout, refreshProfile, switchRole }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, logout, refreshProfile, switchRole, updatePushToken }}>
       {children}
     </AuthContext.Provider>
   );

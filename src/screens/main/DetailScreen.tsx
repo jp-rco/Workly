@@ -16,6 +16,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
 import { formatSalaryNumber } from '../../utils/formatters';
 
+import { useModal } from '../../context/ModalContext';
+
 type Props = NativeStackScreenProps<MainStackParamList, 'Detail'>;
 const { width } = Dimensions.get('window');
 
@@ -23,6 +25,7 @@ export default function DetailScreen({ route, navigation }: Props) {
   const { id, type: kind, applicationId, fromMatches } = route.params as any;
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showAlert } = useModal();
 
   const [data, setData] = useState<any>(null);
   const [appData, setAppData] = useState<any>(null);
@@ -85,10 +88,14 @@ export default function DetailScreen({ route, navigation }: Props) {
         sendEmail(data.email, '¡Felicidades! Has sido contratado/a · Workly',
           `Hola ${data.name}, nos complace informarte que has sido seleccionado para el puesto. ¡Bienvenido al equipo!`);
       }
-      Alert.alert('Listo', `Estado actualizado a "${newStatus}"`);
+      showAlert({
+        title: 'Estado actualizado',
+        message: `La postulación ha sido actualizada a "${newStatus}".`,
+        type: 'success',
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'No se pudo actualizar el estado');
+      showAlert({ title: 'Error', message: 'No se pudo actualizar el estado.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -104,11 +111,15 @@ export default function DetailScreen({ route, navigation }: Props) {
         type: 'nope',
         timestamp: new Date().toISOString(),
       });
-      Alert.alert('Descartado', 'El candidato ha sido descartado de tus búsquedas.');
-      navigation.goBack();
+      showAlert({
+        title: 'Candidato descartado',
+        message: 'El candidato ha sido descartado de tus búsquedas.',
+        type: 'info',
+        onConfirm: () => navigation.goBack(),
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'No se pudo descartar el candidato');
+      showAlert({ title: 'Error', message: 'No se pudo descartar al candidato.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -124,11 +135,15 @@ export default function DetailScreen({ route, navigation }: Props) {
         type: 'EmployerLikesUser',
         timestamp: new Date().toISOString(),
       });
-      Alert.alert('¡Me interesa!', 'Se ha guardado tu interés en este candidato.');
-      navigation.goBack();
+      showAlert({
+        title: '¡Me interesa!',
+        message: 'Se ha guardado tu interés en este candidato.',
+        type: 'success',
+        onConfirm: () => navigation.goBack(),
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'No se pudo guardar el interés');
+      showAlert({ title: 'Error', message: 'No se pudo guardar el interés.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -136,7 +151,7 @@ export default function DetailScreen({ route, navigation }: Props) {
 
   const handleCompleteJob = async () => {
     if (!completionValue) {
-      Alert.alert('Error', 'Por favor ingresa el valor solicitado');
+      showAlert({ title: 'Campo incompleto', message: 'Por favor ingresa el valor solicitado.', type: 'warning' });
       return;
     }
     const field = jobData?.jobSubType === 'formal' ? 'monthsWorked' : 'finalPay';

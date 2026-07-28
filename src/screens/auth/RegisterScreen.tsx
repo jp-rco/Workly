@@ -23,15 +23,18 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { UserType } from '../../context/AuthContext';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Register'>;
   route: any;
 };
 
-export default function RegisterScreen({ navigation }: Props) {
+export default function RegisterScreen({ navigation, route }: Props) {
   const { colors, isDark } = useTheme();
-  const [userType, setUserType] = useState<UserType>('Searching');
+  const { showAlert } = useModal();
+  const initialType = route.params?.type || 'Searching';
+  const [userType, setUserType] = useState<'Searching' | 'Hiring'>(initialType);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +44,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
+      showAlert({ title: 'Campos incompletos', message: 'Por favor completa todos los campos para registrarte.', type: 'warning' });
       return;
     }
     setLoading(true);
@@ -58,7 +61,7 @@ export default function RegisterScreen({ navigation }: Props) {
       await setDoc(doc(db, 'users', userCredential.user.uid), userData);
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Error al registrar', 'Revisa la información o intenta con otro correo.');
+      showAlert({ title: 'Error al registrar', message: 'Revisa la información o intenta con otro correo electrónico.', type: 'error' });
     } finally {
       setLoading(false);
     }

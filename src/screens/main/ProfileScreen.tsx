@@ -15,6 +15,8 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db } from '../../firebase/config';
 import { useEffect } from 'react';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
+import { useNotification } from '../../context/NotificationContext';
 
 type ProfileScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Profile'>,
@@ -26,24 +28,25 @@ type Props = { navigation: ProfileScreenNavigationProp };
 export default function ProfileScreen({ navigation }: Props) {
   const { userProfile, logout, switchRole } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
+  const { showRoleSwitch, showAlert, showConfirm } = useModal();
+  const { showToast } = useNotification();
   const [switching, setSwitching] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
+    if (!userProfile) return;
     const fetchHistory = async () => {
-      if (!userProfile) return;
       setLoadingHistory(true);
       try {
         const q = query(
           collection(db, 'applications'),
-          where(userProfile.userType === 'Searching' ? 'userId' : 'recruiterId', '==', userProfile.uid)
+          where(userProfile.userType === 'Searching' ? 'applicantId' : 'employerId', '==', userProfile.uid)
         );
         const snap = await getDocs(q);
-        const completedSnap = snap.docs.filter(d => d.data().status === 'completed');
-        const enriched = await Promise.all(completedSnap.map(async (d) => {
+        const enriched = await Promise.all(snap.docs.map(async d => {
           const app = d.data();
-          let jData = {};
+          let jData = null;
           if (app.jobId) {
             const jSnap = await getDoc(doc(db, 'jobs', app.jobId));
             if (jSnap.exists()) jData = jSnap.data();
@@ -64,44 +67,53 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const isSearching = userProfile.userType === 'Searching';
 
-  const handleSwitchRole = async () => {
+  const handleSwitchRole = () => {
     const targetRoleName = isSearching ? 'Reclutador / Empresa' : 'Buscador de Empleo';
-    Alert.alert(
-      'Cambiar de perfil',
-      `¿Deseas cambiar al perfil de ${targetRoleName}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Cambiar',
-          onPress: async () => {
-            setSwitching(true);
-            try {
-              const { isFirstTime, targetRole } = await switchRole();
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              if (isFirstTime) {
-                Alert.alert(
-                  '¡Nuevo perfil creado!',
-                  `Se creó tu perfil de ${targetRole === 'Hiring' ? 'Contratante / Empresa' : 'Buscador de Empleo'}. Configura la información de este nuevo perfil.`,
-                  [
-                    {
-                      text: 'Configurar perfil ahora',
-                      onPress: () => navigation.navigate('EditProfile'),
-                    },
-                  ]
-                );
-              } else {
-                Alert.alert('Perfil cambiado', `Ahora estás en tu perfil de ${targetRole === 'Hiring' ? 'Contratante' : 'Candidato'}.`);
-              }
-            } catch (e) {
-              console.error(e);
-              Alert.alert('Error', 'No se pudo cambiar el perfil');
-            } finally {
-              setSwitching(false);
-            }
-          },
-        },
-      ]
-    );
+    showRoleSwitch({
+      targetRoleName,
+      onConfirm: async () => {
+        setSwitching(true);
+        try {
+          const { isFirstTime, targetRole } = await switchRole();
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          if (isFirstTime) {
+            showAlert({
+              title: '¡Nuevo perfil creado!',
+              message: `Se creó tu perfil de ${targetRole === 'Hiring' ? 'Contratante / Empresa' : 'Buscador de Empleo'}. Configura la información de este nuevo perfil.`,
+              type: 'success',
+              buttonText: 'Configurar perfil ahora',
+              onConfirm: () => navigation.navigate('EditProfile'),
+            });
+          } else {
+            showAlert({
+              title: 'Perfil cambiado',
+              message: `Ahora estás en tu perfil de ${targetRole === 'Hiring' ? 'Contratante / Empresa' : 'Candidato'}.`,
+              type: 'success',
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          showAlert({
+            title: 'Error',
+            message: 'No se pudo cambiar el perfil. Intenta nuevamente.',
+            type: 'error',
+          });
+        } finally {
+          setSwitching(false);
+        }
+      },
+    });
+  };
+
+  const handleLogout = () => {
+    showConfirm({
+      title: 'Cerrar sesión',
+      message: '¿Estás seguro de que deseas salir de tu cuenta?',
+      confirmText: 'Cerrar sesión',
+      confirmStyle: 'destructive',
+      icon: 'log-out-outline',
+      onConfirm: logout,
+    });
   };
 
   const s = makeStyles(colors, isDark);
@@ -113,6 +125,21 @@ export default function ProfileScreen({ navigation }: Props) {
         <View style={s.topControls}>
           <TouchableOpacity style={s.iconBtn} onPress={toggleTheme} activeOpacity={0.7}>
             <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={colors.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.iconBtn}
+            onPress={() => {
+              showToast({
+                title: 'Nueva Postulación',
+                message: '¡Juan Pérez se postuló a tu oferta!',
+                type: 'success',
+                icon: 'document-text',
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -161,7 +188,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <Ionicons name="create-outline" size={16} color={colors.onPrimary} />
               <Text style={s.primaryBtnText}>Editar perfil</Text>
             </PressScale>
-            <TouchableOpacity style={s.ghostBtn} onPress={logout} activeOpacity={0.8}>
+            <TouchableOpacity style={s.ghostBtn} onPress={handleLogout} activeOpacity={0.8}>
               <Ionicons name="log-out-outline" size={18} color={colors.reject} />
             </TouchableOpacity>
           </View>

@@ -20,9 +20,10 @@ import {
   useAudioRecorder, useAudioPlayer, useAudioPlayerStatus,
   RecordingPresets, requestRecordingPermissionsAsync,
 } from 'expo-audio';
-import { pickAndUploadImage, uploadToFirebase } from '../../utils/uploadImage';
+import { pickImageFromSource, uploadToFirebase } from '../../utils/uploadImage';
 import MapPickerScreen from './MapPickerScreen';
 import { PressScale, Pulse } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Chat'>;
 
@@ -40,6 +41,7 @@ export default function ChatScreen({ route, navigation }: Props) {
   const { applicationId, otherUserId, jobTitle: routeJobTitle } = route.params;
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showImagePicker, showAlert } = useModal();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
@@ -120,10 +122,23 @@ export default function ChatScreen({ route, navigation }: Props) {
     setInputText('');
   };
 
-  const handleSendImage = async () => {
+  const handleSendImage = () => {
+    showImagePicker({
+      title: 'Enviar imagen',
+      message: '¿De dónde deseas seleccionar la imagen para el chat?',
+      onCamera: () => processSendImage(true),
+      onGallery: () => processSendImage(false),
+    });
+  };
+
+  const processSendImage = async (useCamera: boolean) => {
     const mediaId = applicationId || 'direct_chats';
     const storagePath = `chat_media/${mediaId}/img_${Date.now()}.jpg`;
-    const url = await pickAndUploadImage(storagePath);
+    const { url, error } = await pickImageFromSource(useCamera, storagePath);
+    if (error) {
+      showAlert({ title: 'Atención', message: error, type: 'warning' });
+      return;
+    }
     if (url) sendMessage({ imageUri: url });
   };
 

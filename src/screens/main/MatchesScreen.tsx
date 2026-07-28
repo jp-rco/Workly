@@ -14,6 +14,7 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList, MainTabParamList } from '../../navigation/MainNavigator';
 import { FadeInUp } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 type NavProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Matches'>,
@@ -230,27 +231,25 @@ export default function MatchesScreen() {
     </FadeInUp>
   );
 
+  const { showConfirm, showAlert } = useModal();
+
   const handleDeleteInterest = (likeDocId: string, candidateName: string) => {
-    Alert.alert(
-      'Quitar de interés',
-      `¿Deseas quitar a ${candidateName} de tu lista de personas de interés?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Quitar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'likes', likeDocId));
-              setInterestProfiles((prev) => prev.filter((p) => p.id !== likeDocId));
-            } catch (e) {
-              console.error('Error deleting interest:', e);
-              Alert.alert('Error', 'No se pudo quitar el perfil.');
-            }
-          },
-        },
-      ]
-    );
+    showConfirm({
+      title: 'Quitar de interés',
+      message: `¿Deseas quitar a ${candidateName} de tu lista de personas de interés?`,
+      confirmText: 'Quitar',
+      confirmStyle: 'destructive',
+      icon: 'trash-outline',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'likes', likeDocId));
+          setInterestProfiles((prev) => prev.filter((p) => p.id !== likeDocId));
+        } catch (e) {
+          console.error('Error deleting interest:', e);
+          showAlert({ title: 'Error', message: 'No se pudo quitar el perfil de interés.', type: 'error' });
+        }
+      },
+    });
   };
 
   const renderLikedCard = ({ item, index }: { item: LikedUser; index: number }) => (

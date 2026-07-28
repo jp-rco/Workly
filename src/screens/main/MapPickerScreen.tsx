@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput,
+  ActivityIndicator, TextInput,
 } from 'react-native';
 import MapView, { Marker } from '../../components/common/AppMap';
 import * as Location from 'expo-location';
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { SIZES, SHADOWS, type } from '../../constants/theme';
 import { PressScale } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 export interface PickedLocation {
   latitude: number;
@@ -27,16 +28,17 @@ export default function MapPickerScreen({
   onLocationPicked, onCancel, initialLatitude, initialLongitude,
 }: Props) {
   const { colors, isDark } = useTheme();
-  const mapRef = useRef<MapView>(null);
-  const [loading, setLoading] = useState(true);
-  const [resolving, setResolving] = useState(false);
-  const [locationGranted, setLocationGranted] = useState(false);
+  const { showAlert } = useModal();
   const [markerCoord, setMarkerCoord] = useState({
     latitude: initialLatitude || 4.7110,
     longitude: initialLongitude || -74.0721,
   });
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState('Cargando ubicación…');
+  const [loading, setLoading] = useState(true);
+  const [resolving, setResolving] = useState(false);
   const [search, setSearch] = useState('');
+  const [locationGranted, setLocationGranted] = useState(false);
+  const mapRef = useRef<MapView | null>(null);
 
   const styles = makeStyles(colors, isDark);
 
@@ -47,6 +49,7 @@ export default function MapPickerScreen({
       setLocationGranted(granted);
 
       if (initialLatitude && initialLongitude) {
+        setMarkerCoord({ latitude: initialLatitude, longitude: initialLongitude });
         await reverseGeocode(initialLatitude, initialLongitude);
         setLoading(false);
         return;
@@ -59,7 +62,7 @@ export default function MapPickerScreen({
         await reverseGeocode(coord.latitude, coord.longitude);
         mapRef.current?.animateToRegion({ ...coord, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 1000);
       } else {
-        Alert.alert('Permiso de ubicación', 'Se usará ubicación por defecto (Bogotá)');
+        showAlert({ title: 'Permiso de ubicación', message: 'Se usará la ubicación por defecto (Bogotá).', type: 'info' });
         await reverseGeocode(4.7110, -74.0721);
       }
       setLoading(false);
@@ -100,10 +103,10 @@ export default function MapPickerScreen({
         await reverseGeocode(latitude, longitude);
         mapRef.current?.animateToRegion({ ...coord, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
       } else {
-        Alert.alert('No encontrado', 'No se encontró esa dirección');
+        showAlert({ title: 'No encontrado', message: 'No se encontró esa dirección. Intenta con otra.', type: 'warning' });
       }
     } catch {
-      Alert.alert('Error', 'No se pudo buscar la dirección');
+      showAlert({ title: 'Error', message: 'No se pudo buscar la dirección especificada.', type: 'error' });
     } finally {
       setResolving(false);
     }

@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
+import { useModal } from '../../context/ModalContext';
 
 const { width } = Dimensions.get('window');
 
@@ -248,6 +249,7 @@ const QUICK_CATEGORIES = [
 export default function HomeScreen({ navigation }: Props) {
   const { userProfile, user } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showConfirm, showAlert } = useModal();
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
@@ -397,21 +399,37 @@ export default function HomeScreen({ navigation }: Props) {
     if (item) handleSwipedLeftForItem(item);
   };
 
-  const handleClearDecisions = async () => {
+  const handleClearDecisions = () => {
     if (!userProfile) return;
-    setResetting(true);
-    try {
-      const q = query(collection(db, 'swipes'), where('userId', '==', userProfile.uid));
-      const snap = await getDocs(q);
-      const batch = writeBatch(db);
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-      Alert.alert('Listo', 'Tus descartes anteriores fueron borrados.');
-      fetchCards();
-    } catch (e) {
-      console.error('Error clearing decisions:', e);
-      Alert.alert('Error', 'No se pudieron borrar las decisiones.');
-    } finally { setResetting(false); }
+    showConfirm({
+      title: 'Restablecer descartes',
+      message: '¿Deseas volver a ver las publicaciones y perfiles que habías descartado?',
+      confirmText: 'Restablecer',
+      icon: 'refresh-outline',
+      onConfirm: async () => {
+        setResetting(true);
+        try {
+          const q = query(collection(db, 'swipes'), where('userId', '==', userProfile.uid));
+          const snap = await getDocs(q);
+          const batch = writeBatch(db);
+          snap.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          showAlert({
+            title: 'Descartes restablecidos',
+            message: 'Tus descartes anteriores fueron borrados.',
+            type: 'success',
+          });
+          fetchCards();
+        } catch (e) {
+          console.error('Error clearing decisions:', e);
+          showAlert({
+            title: 'Error',
+            message: 'No se pudieron borrar las decisiones.',
+            type: 'error',
+          });
+        } finally { setResetting(false); }
+      },
+    });
   };
 
   const s = makeStyles(colors, isDark);
