@@ -24,6 +24,7 @@ import { pickImageFromSource, uploadToFirebase } from '../../utils/uploadImage';
 import MapPickerScreen from './MapPickerScreen';
 import { PressScale, Pulse } from '../../components/common/Animated';
 import { useModal } from '../../context/ModalContext';
+import { sendNotificationToUser } from '../../utils/notificationService';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Chat'>;
 
@@ -95,6 +96,8 @@ export default function ChatScreen({ route, navigation }: Props) {
     const conversationId = applicationId ||
       (userProfile.uid < otherUserId ? `${userProfile.uid}_${otherUserId}` : `${otherUserId}_${userProfile.uid}`);
 
+    const lastMsgText = payload.text || (payload.imageUri ? '📷 Imagen' : payload.audioUri ? '🎤 Nota de voz' : '📍 Ubicación');
+
     try {
       await addDoc(collection(db, 'messages'), {
         conversationId, applicationId: applicationId || null,
@@ -102,7 +105,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       });
       await setDoc(doc(db, 'conversations', conversationId), {
         id: conversationId,
-        lastMessage: payload.text || (payload.imageUri ? '📷 Imagen' : payload.audioUri ? '🎤 Nota de voz' : '📍 Ubicación'),
+        lastMessage: lastMsgText,
         lastMessageAt: serverTimestamp(),
         participants: [userProfile.uid, otherUserId],
         applicationId: applicationId || null,
@@ -111,6 +114,24 @@ export default function ChatScreen({ route, navigation }: Props) {
         [`unreadCount_${otherUserId}`]: increment(1),
         [`unreadCount_${userProfile.uid}`]: 0,
       }, { merge: true });
+
+      if (otherUserId) {
+        sendNotificationToUser({
+          recipientId: otherUserId,
+          senderId: userProfile.uid,
+          senderName: userProfile.name,
+          senderPhoto: userProfile.photoURL,
+          title: userProfile.name,
+          body: lastMsgText,
+          type: 'message',
+          data: {
+            applicationId: applicationId || '',
+            conversationId,
+            otherUserId: userProfile.uid,
+            jobTitle: routeJobTitle || appData?.jobTitle || 'Chat',
+          },
+        });
+      }
     } catch (e) {
       console.error('Error sending message:', e);
     }

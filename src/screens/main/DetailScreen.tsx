@@ -15,8 +15,8 @@ import MapView, { Marker } from '../../components/common/AppMap';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
 import { formatSalaryNumber } from '../../utils/formatters';
-
 import { useModal } from '../../context/ModalContext';
+import { sendNotificationToUser } from '../../utils/notificationService';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Detail'>;
 const { width } = Dimensions.get('window');
@@ -81,6 +81,29 @@ export default function DetailScreen({ route, navigation }: Props) {
       await updateDoc(appRef, updates);
       setAppData((prev: any) => ({ ...prev, ...updates }));
 
+      const statusLabels: Record<string, string> = {
+        interview: 'Entrevista programada',
+        accepted: 'Contratado / Aceptado',
+        rejected: 'No seleccionado',
+        pending: 'En revisión',
+      };
+      const statusLabel = statusLabels[newStatus] || newStatus;
+      const jobTitle = jobData?.title || appData?.jobTitle || 'Trabajo';
+      const candidateUserId = appData?.userId || data?.userId;
+
+      if (candidateUserId) {
+        sendNotificationToUser({
+          recipientId: candidateUserId,
+          senderId: userProfile?.uid,
+          senderName: userProfile?.companyName || userProfile?.name,
+          senderPhoto: userProfile?.photoURL,
+          title: 'Actualización de tu postulación',
+          body: `Tu postulación para "${jobTitle}" ha cambiado a: ${statusLabel}.`,
+          type: 'status_change',
+          data: { applicationId, jobId: appData?.jobId || id, status: newStatus },
+        });
+      }
+
       if (newStatus === 'rejected') {
         sendEmail(data.email, 'Actualización de tu postulación · Workly',
           `Hola ${data.name}, lamentamos informarte que tu perfil no ha sido seleccionado para la vacante en este momento. ¡Éxitos en tu búsqueda!`);
@@ -135,6 +158,18 @@ export default function DetailScreen({ route, navigation }: Props) {
         type: 'EmployerLikesUser',
         timestamp: new Date().toISOString(),
       });
+
+      sendNotificationToUser({
+        recipientId: id,
+        senderId: userProfile.uid,
+        senderName: userProfile.companyName || userProfile.name,
+        senderPhoto: userProfile.photoURL,
+        title: '¡Un reclutador está interesado!',
+        body: `${userProfile.companyName || userProfile.name} ha guardado interés en tu perfil profesional.`,
+        type: 'like',
+        data: { employerId: userProfile.uid },
+      });
+
       showAlert({
         title: '¡Me interesa!',
         message: 'Se ha guardado tu interés en este candidato.',

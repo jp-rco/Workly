@@ -3,11 +3,14 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import { CustomToast, ToastOptions } from '../components/common/CustomToast';
 import { useAuth } from './AuthContext';
 
 export interface NotificationContextData {
   expoPushToken: string | null;
+  unreadCount: number;
   showToast: (options: ToastOptions) => void;
 }
 
@@ -16,25 +19,52 @@ const NotificationContext = createContext<NotificationContextData>({} as Notific
 // Configurar cómo se comportan las notificaciones cuando la app está en primer plano
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: false,
-    shouldShowBanner: false,
-    shouldShowList: false,
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { updatePushToken } = useAuth();
+  const { userProfile, updatePushToken } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [toastOptions, setToastOptions] = useState<ToastOptions | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
+  // Escuchar notificaciones no leídas en Firestore para el usuario activo
   useEffect(() => {
-    registerForPushNotificationsAsync().then(token => {
+    if (!userProfile?.uid) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', userProfile.uid),
+      where('read', '==', false)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setUnreadCount(snapshot.size);
+      },
+      (error) => {
+        console.error('Error escuchando notificaciones no leídas:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userProfile?.uid]);
+
+  useEffect(() => {
+    registerForPushNotificationsAsync().then((token) => {
       if (token) {
         setExpoPushToken(token);
         updatePushToken(token);
@@ -44,7 +74,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     // Escuchar notificaciones recibidas mientras la app está abierta
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
       const { title, body } = notification.request.content;
       if (title || body) {
         showToast({
@@ -56,7 +86,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
 
     // Escuchar interacciones (cuando el usuario toca la notificación nativa)
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       console.log('Notification tapped:', response.notification.request.content.data);
     });
 
@@ -80,7 +110,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   return (
-    <NotificationContext.Provider value={{ expoPushToken, showToast }}>
+    <NotificationContext.Provider value={{ expoPushToken, unreadCount, showToast }}>
       {children}
       <CustomToast 
         visible={toastVisible} 

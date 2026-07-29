@@ -14,6 +14,7 @@ import EditProfileScreen from '../screens/main/EditProfileScreen';
 import CreateJobScreen from '../screens/main/CreateJobScreen';
 import DetailScreen from '../screens/main/DetailScreen';
 import ChatScreen from '../screens/main/ChatScreen';
+import NotificationsScreen from '../screens/main/NotificationsScreen';
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -34,6 +35,7 @@ export type MainStackParamList = {
   EditProfile: undefined;
   Detail: { id: string; type: 'Job' | 'Candidate'; applicationId?: string; fromMatches?: boolean };
   Chat: { applicationId?: string; otherUserId: string; jobTitle: string };
+  Notifications: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -148,6 +150,17 @@ export default function MainNavigator() {
         component={ChatScreen}
         options={{
           headerShown: false,
+          headerTintColor: colors.primary,
+          headerStyle: { backgroundColor: colors.headerBg },
+          headerTitleStyle: { color: colors.text },
+        }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{
+          headerShown: false,
+          title: 'Notificaciones',
           headerTintColor: colors.primary,
           headerStyle: { backgroundColor: colors.headerBg },
           headerTitleStyle: { color: colors.text },

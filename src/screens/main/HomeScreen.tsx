@@ -29,6 +29,8 @@ import { CompositeNavigationProp } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { FadeInUp, PressScale } from '../../components/common/Animated';
 import { useModal } from '../../context/ModalContext';
+import { useNotification } from '../../context/NotificationContext';
+import { sendNotificationToUser } from '../../utils/notificationService';
 
 const { width } = Dimensions.get('window');
 
@@ -250,6 +252,7 @@ export default function HomeScreen({ navigation }: Props) {
   const { userProfile, user } = useAuth();
   const { colors, isDark } = useTheme();
   const { showConfirm, showAlert } = useModal();
+  const { unreadCount } = useNotification();
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
@@ -360,18 +363,46 @@ export default function HomeScreen({ navigation }: Props) {
 
     try {
       if (isSearchingForJobs) {
-        await addDoc(collection(db, 'applications'), {
+        const appRef = await addDoc(collection(db, 'applications'), {
           userId: userProfile.uid, jobId: item.id, jobTitle: item.title || '',
           status: 'pending', description: userProfile.jobDescription || '',
           email: userProfile.email || '', name: userProfile.name || '',
           photoURL: userProfile.photoURL || '', resumeURL: userProfile.resumeURL || '',
           createdAt: new Date().toISOString(),
         });
+
+        // Notificar al reclutador (dueño de la vacante)
+        if (item.ownerUid) {
+          sendNotificationToUser({
+            recipientId: item.ownerUid,
+            senderId: userProfile.uid,
+            senderName: userProfile.name,
+            senderPhoto: userProfile.photoURL,
+            title: '¡Nueva Postulación!',
+            body: `${userProfile.name} se ha postulado a tu oferta "${item.title || 'Trabajo'}".`,
+            type: 'application',
+            data: { jobId: item.id, applicationId: appRef.id },
+          });
+        }
       } else {
         await addDoc(collection(db, 'likes'), {
           employerId: userProfile.uid, userId: item.uid,
           type: 'EmployerLikesUser', timestamp: new Date().toISOString(),
         });
+
+        // Notificar al candidato
+        if (item.uid) {
+          sendNotificationToUser({
+            recipientId: item.uid,
+            senderId: userProfile.uid,
+            senderName: userProfile.companyName || userProfile.name,
+            senderPhoto: userProfile.photoURL,
+            title: '¡Un reclutador está interesado!',
+            body: `${userProfile.companyName || userProfile.name} ha guardado interés en tu perfil profesional.`,
+            type: 'like',
+            data: { employerId: userProfile.uid },
+          });
+        }
       }
     } catch (e) { console.error('Error saving swipe right:', e); }
   };
@@ -747,24 +778,40 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           </View>
 
-          {/* BOTÓN DE CAMBIO DE VISTA (CARTAS SWIPER vs LISTA ESTILO CHAT) */}
-          <TouchableOpacity
-            style={s.viewToggleBtn}
-            onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setViewMode(prev => prev === 'cards' ? 'list' : 'cards');
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={viewMode === 'cards' ? 'list-outline' : 'albums-outline'}
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={s.viewToggleText}>
-              {viewMode === 'cards' ? 'Vista Lista' : 'Vista Cartas'}
-            </Text>
-          </TouchableOpacity>
+          <View style={s.headerActionsRow}>
+            {/* BOTÓN DE HISTORIAL DE NOTIFICACIONES */}
+            <TouchableOpacity
+              style={s.notifHeaderBtn}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="notifications-outline" size={20} color={colors.text} />
+              {unreadCount > 0 && (
+                <View style={s.notifBadgeCircle}>
+                  <Text style={s.notifBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* BOTÓN DE CAMBIO DE VISTA (CARTAS SWIPER vs LISTA ESTILO CHAT) */}
+            <TouchableOpacity
+              style={s.viewToggleBtn}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setViewMode(prev => prev === 'cards' ? 'list' : 'cards');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={viewMode === 'cards' ? 'list-outline' : 'albums-outline'}
+                size={18}
+                color={colors.primary}
+              />
+              <Text style={s.viewToggleText}>
+                {viewMode === 'cards' ? 'Lista' : 'Cartas'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* PESTAÑAS DE EMPLEO FORMAL E INFORMAL (Solo cuando busca trabajo) */}
@@ -1022,6 +1069,40 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderRadius: SIZES.radius_full,
   },
   roleTagText: { ...type.caption, color: colors.primary, fontFamily: FONTS.semibold },
+
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notifHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.12)' : 'rgba(10,10,10,0.06)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    position: 'relative',
+  },
+  notifBadgeCircle: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: colors.reject,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
   
   viewToggleBtn: {
     flexDirection: 'row',
