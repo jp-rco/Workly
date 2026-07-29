@@ -37,30 +37,46 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
-  // Escuchar notificaciones no leídas en Firestore para el usuario activo
+  // Escuchar notificaciones no leídas y mensajes entrantes sin leer
   useEffect(() => {
     if (!userProfile?.uid) {
       setUnreadCount(0);
       return;
     }
 
-    const q = query(
+    let notifCount = 0;
+    let convoCount = 0;
+
+    const qNotif = query(
       collection(db, 'notifications'),
       where('userId', '==', userProfile.uid),
       where('read', '==', false)
     );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setUnreadCount(snapshot.size);
-      },
-      (error) => {
-        console.error('Error escuchando notificaciones no leídas:', error);
-      }
+    const qConvo = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', userProfile.uid)
     );
 
-    return () => unsubscribe();
+    const unsubNotif = onSnapshot(qNotif, (snapshot) => {
+      notifCount = snapshot.docs.filter(d => d.data().senderId !== userProfile.uid).length;
+      setUnreadCount(notifCount + convoCount);
+    });
+
+    const unsubConvo = onSnapshot(qConvo, (snapshot) => {
+      convoCount = 0;
+      snapshot.docs.forEach((d) => {
+        const data = d.data();
+        const unread = data[`unreadCount_${userProfile.uid}`] || 0;
+        if (unread > 0) convoCount += 1;
+      });
+      setUnreadCount(notifCount + convoCount);
+    });
+
+    return () => {
+      unsubNotif();
+      unsubConvo();
+    };
   }, [userProfile?.uid]);
 
   useEffect(() => {

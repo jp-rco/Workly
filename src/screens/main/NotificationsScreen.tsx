@@ -20,6 +20,7 @@ import {
   deleteDoc,
   writeBatch,
   getDocs,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -43,9 +44,29 @@ const CATEGORIES = [
   { id: 'like', label: 'Interés' },
 ];
 
-function formatRelativeTime(dateString: string): string {
-  if (!dateString) return '';
-  const date = new Date(dateString);
+function getTimestampMs(val: any): number {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const parsed = new Date(val).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  if (val?.toDate && typeof val.toDate === 'function') {
+    return val.toDate().getTime();
+  }
+  if (typeof val?.seconds === 'number') {
+    return val.seconds * 1000;
+  }
+  if (val instanceof Date) {
+    return val.getTime();
+  }
+  return 0;
+}
+
+function formatRelativeTime(val: any): string {
+  const ms = getTimestampMs(val);
+  if (!ms) return '';
+  const date = new Date(ms);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
@@ -60,6 +81,15 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+function getStatusLabel(s: string) {
+  switch (s) {
+    case 'rejected': return 'Rechazado';
+    case 'accepted': return 'Contratado / Aceptado';
+    case 'interview': return 'Entrevista programada';
+    default: return 'Pendiente';
+  }
+}
+
 export default function NotificationsScreen() {
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
@@ -71,46 +101,224 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  useEffect(() => {
+  const fetchUnifiedNotifications = useCallback(async () => {
     if (!userProfile?.uid) return;
+    setLoading(true);
 
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userProfile.uid)
-    );
+    try {
+      const allItems: NotificationItem[] = [];
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as NotificationItem[];
+      // 1. Notificaciones guardadas directamente en 'notifications'
+      const notifQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', userProfile.uid)
+      );
+      const notifSnap = await getDocs(notifQuery);
+      notifSnap.docs.forEach((d) => {
+        const item = { id: d.id, ...d.data() } as NotificationItem;
+        // No incluir notificaciones enviadas por uno mismo
+        if (item.senderId === userProfile.uid) return;
+        // Ocultar notificaciones de tipo mensaje en la colección notifications (gestionadas por conversaciones en Step 2)
+        if (item.type === 'message') return;
+        allItems.push(item);
+      });
 
-        // Ordenar por fecha descendente
-        list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        setNotifications(list);
-        setLoading(false);
-        setRefreshing(false);
-      },
-      (error) => {
-        console.error('Error escuchando notificaciones:', error);
-        setLoading(false);
-        setRefreshing(false);
+      // 2. Historial de Mensajes ENTRANTES no leídos (Conversations)
+      const convoQuery = query(
+        collection(db, 'conversations'),
+        where('participants', 'array-contains', userProfile.uid)
+      );
+      const convoSnap = await getDocs(convoQuery);
+      await Promise.all(
+        convoSnap.docs.map(async (cDoc) => {
+          const cData = cDoc.data();
+          const otherUserId = cData.participants?.find((p: string) => p !== userProfile.uid);
+          if (!otherUserId) return;
+
+          const unread = cData[`unreadCount_${userProfile.uid}`] || 0;
+          // Si NO hay mensajes sin leer, no mostrar la notificación del mensaje en el historial
+          if (unread === 0) return;
+
+          let otherName = 'Usuario';
+          let otherPhoto = cData.jobImageUrl || '';
+
+          const uSnap = await getDoc(doc(db, 'users', otherUserId));
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            otherName = uData.name || 'Usuario';
+            otherPhoto = uData.photoURL || otherPhoto;
+          }
+
+          let timeStr = new Date().toISOString();
+          if (cData.lastMessageAt?.toDate) {
+            timeStr = cData.lastMessageAt.toDate().toISOString();
+          } else if (typeof cData.lastMessageAt === 'string') {
+            timeStr = cData.lastMessageAt;
+          }
+
+          allItems.push({
+            id: `convo_${cDoc.id}`,
+            userId: userProfile.uid,
+            senderId: otherUserId,
+            senderName: otherName,
+            senderPhoto: otherPhoto,
+            title: otherName,
+            body: cData.lastMessage || 'Nuevo mensaje de chat',
+            type: 'message',
+            read: false,
+            createdAt: timeStr,
+            data: {
+              conversationId: cDoc.id,
+              otherUserId,
+              applicationId: cData.applicationId || '',
+              jobTitle: cData.jobTitle || 'Chat',
+            },
+          });
+        })
+      );
+
+      // 3. Historial de Postulaciones (Applications)
+      if (userProfile.userType === 'Searching') {
+        const appQuery = query(
+          collection(db, 'applications'),
+          where('userId', '==', userProfile.uid)
+        );
+        const appSnap = await getDocs(appQuery);
+        appSnap.docs.forEach((aDoc) => {
+          const aData = aDoc.data();
+          // Notificación de la postulación enviada
+          allItems.push({
+            id: `app_sent_${aDoc.id}`,
+            userId: userProfile.uid,
+            title: 'Postulación Registrada',
+            body: `Te postulaste a la vacante "${aData.jobTitle || 'Trabajo'}".`,
+            type: 'application',
+            read: true,
+            createdAt: aData.createdAt || new Date().toISOString(),
+            data: { jobId: aData.jobId, applicationId: aDoc.id },
+          });
+
+          // Notificación si el estado cambió
+          if (aData.status && aData.status !== 'pending') {
+            allItems.push({
+              id: `app_status_${aDoc.id}`,
+              userId: userProfile.uid,
+              title: `Estado: ${getStatusLabel(aData.status)}`,
+              body: `Tu proceso para "${aData.jobTitle || 'Trabajo'}" cambió a "${getStatusLabel(aData.status)}".`,
+              type: 'status_change',
+              read: aData.statusViewed !== false,
+              createdAt: aData.interviewDate || aData.createdAt || new Date().toISOString(),
+              data: { jobId: aData.jobId, applicationId: aDoc.id, status: aData.status },
+            });
+          }
+        });
+
+        // 4. Historial de Intereses recibidos de reclutadores (Likes)
+        const likesQuery = query(
+          collection(db, 'likes'),
+          where('userId', '==', userProfile.uid)
+        );
+        const likesSnap = await getDocs(likesQuery);
+        await Promise.all(
+          likesSnap.docs.map(async (lDoc) => {
+            const lData = lDoc.data();
+            let employerName = 'Un reclutador';
+            let employerPhoto = '';
+            if (lData.employerId) {
+              const empSnap = await getDoc(doc(db, 'users', lData.employerId));
+              if (empSnap.exists()) {
+                const empData = empSnap.data();
+                employerName = empData.companyName || empData.name || 'Un reclutador';
+                employerPhoto = empData.photoURL || '';
+              }
+            }
+
+            allItems.push({
+              id: `like_rec_${lDoc.id}`,
+              userId: userProfile.uid,
+              senderId: lData.employerId,
+              senderName: employerName,
+              senderPhoto: employerPhoto,
+              title: '¡Interés de reclutador!',
+              body: `${employerName} ha guardado interés en tu perfil profesional.`,
+              type: 'like',
+              read: true,
+              createdAt: lData.timestamp || new Date().toISOString(),
+              data: { employerId: lData.employerId },
+            });
+          })
+        );
+      } else {
+        // Modo Reclutador (Hiring): Obtener aplicaciones a sus vacantes
+        const jobsQuery = query(
+          collection(db, 'jobs'),
+          where('ownerUid', '==', userProfile.uid)
+        );
+        const jobsSnap = await getDocs(jobsQuery);
+        await Promise.all(
+          jobsSnap.docs.map(async (jDoc) => {
+            const jData = jDoc.data();
+            const qApps = query(collection(db, 'applications'), where('jobId', '==', jDoc.id));
+            const appsSnap = await getDocs(qApps);
+            appsSnap.docs.forEach((aDoc) => {
+              const aData = aDoc.data();
+              allItems.push({
+                id: `rec_app_${aDoc.id}`,
+                userId: userProfile.uid,
+                senderId: aData.userId,
+                senderName: aData.name || 'Candidato',
+                senderPhoto: aData.photoURL || '',
+                title: '¡Nueva Postulación!',
+                body: `${aData.name || 'Un candidato'} se postuló a "${jData.title || aData.jobTitle}".`,
+                type: 'application',
+                read: aData.statusViewed !== false,
+                createdAt: aData.createdAt || new Date().toISOString(),
+                data: { jobId: jDoc.id, applicationId: aDoc.id },
+              });
+            });
+          })
+        );
       }
-    );
 
-    return () => unsubscribe();
-  }, [userProfile?.uid]);
+      // Eliminar duplicados por ID y ordenar por fecha descendente
+      const uniqueMap = new Map<string, NotificationItem>();
+      allItems.forEach((item) => {
+        if (!uniqueMap.has(item.id!)) {
+          uniqueMap.set(item.id!, item);
+        }
+      });
+
+      const sortedList = Array.from(uniqueMap.values()).sort((a, b) =>
+        getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)
+      );
+
+      setNotifications(sortedList);
+    } catch (e) {
+      console.error('Error agrupando historial de notificaciones:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [userProfile]);
+
+  useEffect(() => {
+    fetchUnifiedNotifications();
+  }, [fetchUnifiedNotifications]);
 
   const onRefresh = () => {
     setRefreshing(true);
+    fetchUnifiedNotifications();
   };
 
   const handleMarkAsRead = async (item: NotificationItem) => {
-    if (!item.id || item.read) return;
+    if (item.read) return;
     try {
-      await updateDoc(doc(db, 'notifications', item.id), { read: true });
+      if (item.id && !item.id.includes('_')) {
+        await updateDoc(doc(db, 'notifications', item.id), { read: true });
+      }
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
+      );
     } catch (e) {
       console.error('Error al marcar como leída:', e);
     }
@@ -123,14 +331,15 @@ export default function NotificationsScreen() {
     try {
       const batch = writeBatch(db);
       unreadItems.forEach((n) => {
-        if (n.id) {
+        if (n.id && !n.id.includes('_')) {
           batch.update(doc(db, 'notifications', n.id), { read: true });
         }
       });
       await batch.commit();
+
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (e) {
       console.error('Error al marcar todas como leídas:', e);
-      showAlert({ title: 'Error', message: 'No se pudieron actualizar las notificaciones.', type: 'error' });
     }
   };
 
@@ -138,13 +347,16 @@ export default function NotificationsScreen() {
     if (!item.id) return;
     showConfirm({
       title: 'Eliminar notificación',
-      message: '¿Deseas borrar esta notificación de tu historial?',
+      message: '¿Deseas borrar esta notificación de tu registro?',
       confirmText: 'Eliminar',
       confirmStyle: 'destructive',
       icon: 'trash-outline',
       onConfirm: async () => {
         try {
-          await deleteDoc(doc(db, 'notifications', item.id!));
+          if (!item.id!.includes('_')) {
+            await deleteDoc(doc(db, 'notifications', item.id!));
+          }
+          setNotifications((prev) => prev.filter((n) => n.id !== item.id));
         } catch (e) {
           console.error('Error al borrar notificación:', e);
         }
@@ -164,14 +376,14 @@ export default function NotificationsScreen() {
         try {
           const batch = writeBatch(db);
           notifications.forEach((n) => {
-            if (n.id) {
+            if (n.id && !n.id.includes('_')) {
               batch.delete(doc(db, 'notifications', n.id));
             }
           });
           await batch.commit();
+          setNotifications([]);
         } catch (e) {
           console.error('Error al vaciar notificaciones:', e);
-          showAlert({ title: 'Error', message: 'No se pudo vaciar el historial.', type: 'error' });
         }
       },
     });
@@ -261,7 +473,7 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Notificaciones</Text>
+          <Text style={styles.headerTitle}>Historial de Notificaciones</Text>
           {unreadCount > 0 && (
             <View style={styles.unreadBadge}>
               <Text style={styles.unreadBadgeText}>{unreadCount} nuevas</Text>
@@ -436,9 +648,11 @@ const makeStyles = (colors: any, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+      flex: 1,
+      marginLeft: 8,
     },
     headerTitle: {
-      ...type.h2,
+      ...type.h3,
       color: colors.text,
     },
     unreadBadge: {

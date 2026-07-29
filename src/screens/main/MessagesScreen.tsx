@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../../navigation/MainNavigator';
 import { FadeInUp } from '../../components/common/Animated';
+import { useNotification } from '../../context/NotificationContext';
 
 type NavProp = NativeStackNavigationProp<MainStackParamList>;
 
@@ -32,6 +33,7 @@ export default function MessagesScreen() {
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<NavProp>();
+  const { unreadCount } = useNotification();
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -163,6 +165,18 @@ export default function MessagesScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mensajes</Text>
+        <TouchableOpacity
+          style={styles.notifBtn}
+          onPress={() => navigation.navigate('Notifications')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="notifications-outline" size={22} color={colors.text} />
+          {unreadCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.tabBar}>
@@ -204,8 +218,24 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: SIZES.sm,
     backgroundColor: colors.headerBg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: { ...type.display, color: colors.text },
+  notifBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.12)' : 'rgba(10,10,10,0.06)',
+    borderWidth: 1, borderColor: colors.border,
+    position: 'relative',
+  },
+  notifBadge: {
+    position: 'absolute', top: -3, right: -3,
+    backgroundColor: colors.reject, minWidth: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  notifBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: 'bold' },
 
   tabBar: {
     flexDirection: 'row',

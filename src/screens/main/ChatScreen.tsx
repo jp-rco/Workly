@@ -13,6 +13,7 @@ import { db } from '../../firebase/config';
 import {
   collection, addDoc, query, where, onSnapshot,
   serverTimestamp, setDoc, doc, increment, getDoc,
+  getDocs, deleteDoc,
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { SIZES, type } from '../../constants/theme';
@@ -80,6 +81,22 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     const conversationId = applicationId ||
       (userProfile.uid < otherUserId ? `${userProfile.uid}_${otherUserId}` : `${otherUserId}_${userProfile.uid}`);
+
+    // Limpiar contador de no leídos en la conversación
+    setDoc(doc(db, 'conversations', conversationId), {
+      [`unreadCount_${userProfile.uid}`]: 0,
+    }, { merge: true }).catch(() => {});
+
+    // Eliminar notificaciones de mensaje recibidos de este chat en el historial
+    const notifQ = query(
+      collection(db, 'notifications'),
+      where('userId', '==', userProfile.uid),
+      where('type', '==', 'message'),
+      where('data.conversationId', '==', conversationId)
+    );
+    getDocs(notifQ).then((snap) => {
+      snap.docs.forEach((d) => deleteDoc(d.ref).catch(() => {}));
+    }).catch(() => {});
 
     const q = query(collection(db, 'messages'), where('conversationId', '==', conversationId));
 

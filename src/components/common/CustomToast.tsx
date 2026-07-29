@@ -67,6 +67,13 @@ export const CustomToast: React.FC<CustomToastProps> = ({ visible, options, onHi
     });
   };
 
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+      opacity: opacity.value,
+    };
+  });
+
   if (!options) return null;
 
   const getIconAndColor = () => {
@@ -82,13 +89,6 @@ export const CustomToast: React.FC<CustomToastProps> = ({ visible, options, onHi
   const { icon, color } = getIconAndColor();
   const bgColor = isDark ? colors.card : '#FFFFFF';
   const borderColor = isDark ? colors.border : '#E5E5E5';
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: translateY.value }],
-      opacity: opacity.value,
-    };
-  });
 
   return (
     <Animated.View style={[styles.container, animatedStyle]} pointerEvents="box-none">

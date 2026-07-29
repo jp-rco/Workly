@@ -94,21 +94,23 @@ export async function sendNotificationToUser(options: SendNotificationOptions) {
   if (!recipientId) return;
 
   try {
-    // 1. Guardar la notificación en la colección 'notifications' de Firestore
-    const notificationPayload: NotificationItem = {
-      userId: recipientId,
-      senderId: senderId || '',
-      senderName: senderName || '',
-      senderPhoto: senderPhoto || '',
-      title,
-      body,
-      type,
-      data: data || {},
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
+    // 1. Guardar la notificación en la colección 'notifications' de Firestore (solo eventos no de chat)
+    if (type !== 'message') {
+      const notificationPayload: NotificationItem = {
+        userId: recipientId,
+        senderId: senderId || '',
+        senderName: senderName || '',
+        senderPhoto: senderPhoto || '',
+        title,
+        body,
+        type,
+        data: data || {},
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
 
-    await addDoc(collection(db, 'notifications'), notificationPayload);
+      await addDoc(collection(db, 'notifications'), notificationPayload);
+    }
 
     // 2. Obtener el token Push del usuario destinatario
     const userDocRef = doc(db, 'users', recipientId);

@@ -29,7 +29,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const { userProfile, logout, switchRole } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const { showRoleSwitch, showAlert, showConfirm } = useModal();
-  const { showToast } = useNotification();
+  const { showToast, unreadCount } = useNotification();
   const [switching, setSwitching] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -128,18 +128,16 @@ export default function ProfileScreen({ navigation }: Props) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={s.iconBtn}
-            onPress={() => {
-              showToast({
-                title: 'Nueva Postulación',
-                message: '¡Juan Pérez se postuló a tu oferta!',
-                type: 'success',
-                icon: 'document-text',
-              });
-            }}
+            style={[s.iconBtn, { position: 'relative' }]}
+            onPress={() => navigation.navigate('Notifications')}
             activeOpacity={0.7}
           >
-            <Ionicons name="notifications-outline" size={18} color={colors.primary} />
+            <Ionicons name="notifications-outline" size={18} color={colors.text} />
+            {unreadCount > 0 && (
+              <View style={s.notifBadgeCircle}>
+                <Text style={s.notifBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -294,6 +292,12 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
   },
+  notifBadgeCircle: {
+    position: 'absolute', top: -3, right: -3,
+    backgroundColor: colors.reject, minWidth: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  notifBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: 'bold' },
   roleSwitchBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 9,

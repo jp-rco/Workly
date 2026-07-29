@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList, MainTabParamList } from '../../navigation/MainNavigator';
 import { FadeInUp } from '../../components/common/Animated';
 import { useModal } from '../../context/ModalContext';
+import { useNotification } from '../../context/NotificationContext';
 
 type NavProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Matches'>,
@@ -42,6 +43,7 @@ export default function MatchesScreen() {
   const { userProfile } = useAuth();
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<NavProp>();
+  const { unreadCount } = useNotification();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,7 +79,7 @@ export default function MatchesScreen() {
         statusViewed: app.statusViewed !== false,
       } as ApplicationItem;
     });
-    setApplicantsForJob(enriched.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    setApplicantsForJob(enriched.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))));
   };
 
   const fetchData = useCallback(async () => {
@@ -109,7 +111,7 @@ export default function MatchesScreen() {
             jobDuration: jobData.duration,
           } as ApplicationItem;
         }));
-        setApplications(enriched.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+        setApplications(enriched.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))));
       } else {
         if (recruiterTab === 'applications') {
           const jobsSnap = await getDocs(query(collection(db, 'jobs'), where('ownerUid', '==', userProfile.uid)));
@@ -136,7 +138,7 @@ export default function MatchesScreen() {
               timestamp: like.timestamp || '',
             };
           }));
-          setInterestProfiles(likedList.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+          setInterestProfiles(likedList.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || ''))));
         }
       }
     } catch (e) {
@@ -327,6 +329,19 @@ export default function MatchesScreen() {
             {isSearching ? 'Mis procesos' : (selectedJobId ? 'Candidatos' : 'Matches')}
           </Text>
         )}
+
+        <TouchableOpacity
+          style={styles.notifBtn}
+          onPress={() => navigation.navigate('Notifications')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="notifications-outline" size={20} color={colors.text} />
+          {unreadCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {isSearching && (
@@ -439,14 +454,27 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
 
   headerBar: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SIZES.lg,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: SIZES.sm,
     backgroundColor: colors.headerBg,
   },
   backBtn: { marginRight: 12 },
-  headerTitle: { ...type.h1, color: colors.text },
+  headerTitle: { ...type.h1, color: colors.text, flex: 1 },
+  notifBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(232,197,108,0.12)' : 'rgba(10,10,10,0.06)',
+    borderWidth: 1, borderColor: colors.border,
+    position: 'relative', marginLeft: 8,
+  },
+  notifBadge: {
+    position: 'absolute', top: -3, right: -3,
+    backgroundColor: colors.reject, minWidth: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  notifBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: 'bold' },
 
   tabContainer: { flexDirection: 'row', flex: 1, gap: 8 },
   tab: {
